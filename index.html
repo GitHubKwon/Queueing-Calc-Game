@@ -1,0 +1,1240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Take a Number</title>
+<meta name="description" content="A queueing theory game and calculator. Staff a coffee cart, bank, food truck, car wash and stadium, beat the wait, and earn stars. Includes M/M/1, M/M/c, M/M/1/K and M/D/1 calculators.">
+<meta property="og:title" content="Take a Number">
+<meta property="og:description" content="Queueing theory, played. Beat the wait, earn stars, and try the Daily Rush.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#D93A33">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Cpath d='M4 9a3 3 0 0 1 3-3h26a3 3 0 0 1 3 3v6a5 5 0 0 0 0 10v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6a5 5 0 0 0 0-10z' fill='%23D93A33'/%3E%3Cpath d='M14 8v24' stroke='%23fff' stroke-width='1.6' stroke-dasharray='2.5 2.5'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0; font:14px system-ui, sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Figtree:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a tiled shop floor. Levels are deli ticket stubs, numbers live on amber LED readouts, the queue itself is a live canvas. */
+:root{
+  --bg:#D6EAE1; --tile:#C7E0D5; --surface:#F7FBF9; --surface2:#E6F2EC; --ink:#12302A; --muted:#52706A; --line:#B2CEC2;
+  --ticket:#D93A33; --ticket-dark:#A82620; --on-ticket:#FFF7F2; --mustard:#EFB12A; --mustard-dark:#B9850C;
+  --good:#16865A; --warn:#B87300; --bad:#C6322A; --staff:#12302A;
+  --led-bg:#17211D; --led:#FFB547; --led-dim:#6E5530; --led-label:#9FB7AE;
+  --shadow:0 1px 0 rgba(18,48,42,.06), 0 8px 24px -12px rgba(18,48,42,.35);
+  --f-display:'Bungee', 'Arial Black', Impact, sans-serif;
+  --f-body:'Figtree', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --f-mono:'IBM Plex Mono', ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0D1B17; --tile:#11241F; --surface:#152A24; --surface2:#1B352E; --ink:#E1F0EA; --muted:#8FAAA0; --line:#2A483F;
+  --ticket:#F2554B; --ticket-dark:#B3332B; --on-ticket:#FFF7F2; --mustard:#F3C04E; --mustard-dark:#B78A1C;
+  --good:#3CCB8D; --warn:#F2A83A; --bad:#FF6A5E; --staff:#E1F0EA;
+  --led-bg:#050908; --led:#FFB547; --led-dim:#5C4626; --led-label:#7F978E;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.8);
+  color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0D1B17; --tile:#11241F; --surface:#152A24; --surface2:#1B352E; --ink:#E1F0EA; --muted:#8FAAA0; --line:#2A483F;
+  --ticket:#F2554B; --ticket-dark:#B3332B; --on-ticket:#FFF7F2; --mustard:#F3C04E; --mustard-dark:#B78A1C;
+  --good:#3CCB8D; --warn:#F2A83A; --bad:#FF6A5E; --staff:#E1F0EA;
+  --led-bg:#050908; --led:#FFB547; --led-dim:#5C4626; --led-label:#7F978E;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 28px -14px rgba(0,0,0,.8);
+  color-scheme:dark; }
+
+*{box-sizing:border-box}
+body{
+  background-color:var(--bg); color:var(--ink); font-family:var(--f-body); font-size:15px; line-height:1.5;
+  background-image:linear-gradient(var(--tile) 2px, transparent 2px), linear-gradient(90deg, var(--tile) 2px, transparent 2px);
+  background-size:44px 44px; min-height:100vh;
+}
+button{font:inherit; color:inherit; cursor:pointer}
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible{outline:3px solid var(--mustard); outline-offset:2px}
+.app{max-width:1180px; margin:0 auto; padding-block:14px 48px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px))}
+h1,h2,h3{text-wrap:balance; margin:0}
+.display{font-family:var(--f-display); font-weight:400; letter-spacing:.01em}
+.eyebrow{font-size:12px; font-weight:700; letter-spacing:.1em; text-transform:uppercase; color:var(--muted)}
+.muted{color:var(--muted)}
+.mono{font-family:var(--f-mono); font-variant-numeric:tabular-nums}
+
+/* top bar */
+.top{display:flex; flex-wrap:wrap; align-items:center; gap:12px 20px; justify-content:space-between}
+.brand{display:flex; align-items:center; gap:10px; background:none; border:0; padding:0}
+.brand svg{flex:none}
+.brand .display{font-size:22px; line-height:1}
+.player{display:flex; align-items:center; gap:12px; flex-wrap:wrap}
+.rank{display:flex; flex-direction:column; gap:4px; min-width:160px}
+.rank-row{display:flex; justify-content:space-between; gap:10px; font-size:13px; font-weight:700}
+.xpbar{height:8px; border-radius:99px; background:var(--surface2); border:1px solid var(--line); overflow:hidden}
+.xpbar i{display:block; height:100%; width:0; background:var(--mustard); border-radius:99px; transition:width .6s cubic-bezier(.2,.9,.3,1.2)}
+.pill{display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:99px; background:var(--surface); border:1px solid var(--line); font-weight:700; font-size:13px}
+.pill svg{width:16px; height:16px}
+.iconbtn{display:inline-grid; place-items:center; width:36px; height:36px; border-radius:10px; background:var(--surface); border:1px solid var(--line)}
+.iconbtn svg{width:18px; height:18px}
+
+nav.tabs{display:flex; gap:6px; margin:16px 0 18px; padding:5px; background:var(--surface); border:1px solid var(--line); border-radius:14px; width:fit-content; max-width:100%; overflow-x:auto}
+nav.tabs button{border:0; background:none; padding:8px 14px; border-radius:10px; font-weight:700; white-space:nowrap; color:var(--muted)}
+nav.tabs button[aria-selected="true"]{background:var(--ink); color:var(--surface)}
+
+/* buttons */
+.btn{display:inline-flex; align-items:center; justify-content:center; gap:8px; border:0; border-radius:12px; padding:12px 18px; font-weight:800; transition:transform .08s}
+.btn:active{transform:translateY(2px)}
+.btn-go{background:var(--ticket); color:var(--on-ticket); font-family:var(--f-display); font-weight:400; font-size:17px; letter-spacing:.02em; box-shadow:0 4px 0 var(--ticket-dark); padding:14px 22px}
+.btn-go:active{box-shadow:0 1px 0 var(--ticket-dark); transform:translateY(3px)}
+.btn-go[disabled]{opacity:.5; cursor:not-allowed}
+.btn-gold{background:var(--mustard); color:#2A1D00; box-shadow:0 4px 0 var(--mustard-dark)}
+.btn-gold:active{box-shadow:0 1px 0 var(--mustard-dark); transform:translateY(3px)}
+.btn-ghost{background:var(--surface); border:1px solid var(--line)}
+.btn-sm{padding:7px 12px; font-size:13px; border-radius:9px}
+
+/* map */
+.hero{display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:20px; align-items:center; margin-bottom:26px}
+.hero h1{font-family:var(--f-display); font-weight:400; font-size:clamp(30px,5vw,50px); line-height:1.02}
+.hero h1 em{font-style:normal; color:var(--ticket)}
+.hero p{max-width:58ch; margin:10px 0 16px; font-size:16px}
+.hero .actions{display:flex; gap:10px; flex-wrap:wrap}
+.legend{background:var(--led-bg); color:var(--led); border-radius:16px; padding:16px 18px; display:grid; gap:10px; box-shadow:var(--shadow)}
+.legend .row{display:grid; grid-template-columns:44px minmax(0,1fr); gap:10px; align-items:baseline}
+.legend b{font-family:var(--f-mono); font-size:22px; text-shadow:0 0 10px rgba(255,181,71,.45)}
+.legend span{color:var(--led-label); font-size:13.5px}
+.world{margin-bottom:26px}
+.world-head{display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; margin-bottom:10px}
+.world-head h2{font-family:var(--f-display); font-weight:400; font-size:22px}
+.model-tag{font-family:var(--f-mono); font-size:12.5px; font-weight:600; padding:2px 8px; border-radius:6px; background:var(--ink); color:var(--surface)}
+.world-head p{margin:0; color:var(--muted); font-size:14px; flex-basis:100%}
+.tickets{display:grid; grid-template-columns:repeat(auto-fill, minmax(230px,1fr)); gap:12px}
+.ticket{
+  position:relative; display:grid; grid-template-columns:72px minmax(0,1fr); text-align:left; border:0; padding:0; border-radius:10px;
+  background:var(--surface); box-shadow:var(--shadow); min-height:92px; transition:transform .15s;
+  -webkit-mask:radial-gradient(circle 9px at 0 50%, #0000 97%, #000) left/51% 100% no-repeat, radial-gradient(circle 9px at 100% 50%, #0000 97%, #000) right/51% 100% no-repeat;
+          mask:radial-gradient(circle 9px at 0 50%, #0000 97%, #000) left/51% 100% no-repeat, radial-gradient(circle 9px at 100% 50%, #0000 97%, #000) right/51% 100% no-repeat;
+}
+.ticket:not([disabled]):hover{transform:translateY(-3px) rotate(-.4deg)}
+.ticket .stub{background:var(--ticket); color:var(--on-ticket); display:grid; place-content:center; text-align:center; border-right:2px dashed var(--surface); padding:8px 4px}
+.ticket .stub small{font-size:10px; font-weight:800; letter-spacing:.12em}
+.ticket .stub b{font-family:var(--f-display); font-weight:400; font-size:28px; line-height:1}
+.ticket .body{padding:12px 16px 12px 14px; display:flex; flex-direction:column; justify-content:center; gap:6px; min-width:0}
+.ticket .body strong{font-size:16px; line-height:1.2}
+.ticket[disabled]{cursor:not-allowed}
+.ticket[disabled] .stub{background:var(--line); color:var(--muted)}
+.ticket[disabled] .body{color:var(--muted)}
+.ticket.next .stub{background:var(--mustard); color:#2A1D00}
+.ticket.next{animation:nudge 2.4s ease-in-out infinite}
+@keyframes nudge{0%,80%,100%{transform:none}86%{transform:rotate(-1.2deg)}92%{transform:rotate(1.2deg)}}
+.stars{display:inline-flex; gap:2px}
+.stars svg{width:18px; height:18px}
+.star-on{fill:var(--mustard); stroke:var(--mustard-dark)}
+.star-off{fill:none; stroke:var(--line); stroke-width:1.6}
+
+/* level */
+.level{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.25fr); grid-template-areas:"brief scene" "controls scene" "controls readouts"; gap:16px; align-items:start}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:16px; padding:18px; box-shadow:var(--shadow); min-width:0}
+.brief{grid-area:brief}
+.controls{grid-area:controls; display:grid; gap:16px}
+.scenewrap{grid-area:scene}
+.readouts-card{grid-area:readouts}
+.brief .back{margin-bottom:10px}
+.brief h2{font-family:var(--f-display); font-weight:400; font-size:26px; line-height:1.1; margin:4px 0 8px}
+.brief p{margin:0 0 12px; max-width:62ch}
+.chips{display:flex; flex-wrap:wrap; gap:6px}
+.chip{font-family:var(--f-mono); font-size:13px; padding:4px 9px; border-radius:8px; background:var(--surface2); border:1px solid var(--line)}
+.lever{display:grid; gap:6px}
+.lever + .lever{margin-top:14px; padding-top:14px; border-top:1px dashed var(--line)}
+.lever-top{display:flex; justify-content:space-between; align-items:baseline; gap:10px}
+.lever-top label{font-weight:700}
+.lever-val{font-family:var(--f-mono); font-size:24px; font-weight:600; font-variant-numeric:tabular-nums}
+.lever-val small{font-size:12px; color:var(--muted); margin-left:4px; font-family:var(--f-body)}
+.lever-row{display:grid; grid-template-columns:40px minmax(0,1fr) 40px; gap:10px; align-items:center}
+.step{width:40px; height:40px; border-radius:10px; border:1px solid var(--line); background:var(--surface2); font-size:22px; font-weight:800; line-height:1}
+.step:active{transform:translateY(2px)}
+.lever-hint{font-size:12.5px; color:var(--muted)}
+input[type=range]{width:100%; accent-color:var(--ticket); height:28px}
+.goals-head{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px}
+.goals-head .stars svg{width:30px; height:30px}
+.goals-head .stars svg.pop{animation:pop .45s cubic-bezier(.2,1.6,.4,1)}
+@keyframes pop{0%{transform:scale(.4)}100%{transform:scale(1)}}
+.goal{display:grid; grid-template-columns:28px minmax(0,1fr) auto; gap:10px; align-items:center; padding:9px 0; border-top:1px solid var(--line)}
+.goal .box{width:26px; height:26px; border-radius:8px; border:2px solid var(--line); display:grid; place-items:center}
+.goal .box svg{width:16px; height:16px; opacity:0}
+.goal.met .box{background:var(--good); border-color:var(--good)}
+.goal.met .box svg{opacity:1; stroke:#fff; animation:pop .35s cubic-bezier(.2,1.6,.4,1)}
+.goal .now{font-family:var(--f-mono); font-size:13px; color:var(--muted); text-align:right; white-space:nowrap}
+.goal.met .now{color:var(--good)}
+.goal .gtext{font-weight:600}
+.cost-note{font-size:12.5px; color:var(--muted); margin-top:8px}
+.warnline{margin-top:10px; padding:8px 10px; border-radius:10px; background:color-mix(in srgb, var(--bad) 14%, transparent); color:var(--bad); font-weight:700; font-size:13.5px}
+
+.scenewrap{display:grid; gap:10px}
+.scene-card{background:var(--surface); border:1px solid var(--line); border-radius:16px; overflow:hidden; box-shadow:var(--shadow)}
+.scene-bar{display:flex; flex-wrap:wrap; gap:8px 14px; align-items:center; justify-content:space-between; padding:10px 12px; background:var(--led-bg); color:var(--led)}
+.led-sign{display:flex; align-items:baseline; gap:8px; font-family:var(--f-mono); font-size:11px; letter-spacing:.14em; color:var(--led-label)}
+.led-sign b{font-size:24px; letter-spacing:.08em; color:var(--led); text-shadow:0 0 10px rgba(255,181,71,.5)}
+.led-sign b.flash{animation:ledflash .35s}
+@keyframes ledflash{0%{color:#fff}100%{color:var(--led)}}
+.scene-stats{display:flex; gap:12px; font-family:var(--f-mono); font-size:12px; color:var(--led-label); flex-wrap:wrap}
+.scene-stats b{color:var(--led); font-weight:600}
+canvas.scene{display:block; width:100%; height:300px}
+.scene-foot{display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; padding:10px 12px; border-top:1px solid var(--line)}
+.speed{display:flex; gap:4px}
+.speed button{border:1px solid var(--line); background:var(--surface2); border-radius:8px; padding:4px 9px; font-family:var(--f-mono); font-size:12px; font-weight:600}
+.speed button[aria-pressed="true"]{background:var(--ink); color:var(--surface); border-color:var(--ink)}
+.shiftbar{height:6px; background:var(--surface2); position:relative}
+.shiftbar i{position:absolute; inset:0 auto 0 0; width:0; background:var(--ticket)}
+
+.readouts{display:grid; grid-template-columns:repeat(auto-fill, minmax(118px,1fr)); gap:8px}
+.led-tile{background:var(--led-bg); border-radius:12px; padding:9px 11px; display:grid; gap:2px; border:2px solid transparent}
+.led-tile .lbl{font-size:11px; color:var(--led-label); font-weight:600; line-height:1.25}
+.led-tile .val{font-family:var(--f-mono); font-size:20px; font-weight:600; color:var(--led); font-variant-numeric:tabular-nums; text-shadow:0 0 8px rgba(255,181,71,.35); white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.led-tile .sym{font-family:var(--f-mono); font-size:11px; color:var(--led-dim)}
+.led-tile.key{border-color:var(--mustard)}
+.led-tile.inf .val{color:var(--bad); text-shadow:none}
+
+/* modal */
+.modal-bg{position:fixed; inset:0; background:rgba(5,15,12,.55); display:grid; place-items:center; z-index:50; padding:16px; padding-left:max(16px, env(safe-area-inset-left, 0px)); padding-right:max(16px, env(safe-area-inset-right, 0px)); overflow-y:auto}
+.modal{background:var(--surface); color:var(--ink); border-radius:20px; width:min(560px,100%); padding:24px; box-shadow:0 30px 80px -20px rgba(0,0,0,.6); animation:rise .35s cubic-bezier(.2,1.3,.4,1); max-height:calc(100vh - 32px); overflow-y:auto}
+@keyframes rise{from{transform:translateY(30px) scale(.96); opacity:0}to{transform:none; opacity:1}}
+.modal h2{font-family:var(--f-display); font-weight:400; font-size:30px; line-height:1.05; text-align:center}
+.bigstars{display:flex; justify-content:center; gap:10px; margin:14px 0 6px}
+.bigstars svg{width:62px; height:62px; transform:scale(0); }
+.bigstars svg.in{animation:stamp .5s cubic-bezier(.2,1.7,.4,1) forwards}
+@keyframes stamp{0%{transform:scale(2.2) rotate(-25deg); opacity:0}100%{transform:scale(1) rotate(0); opacity:1}}
+.xpgain{text-align:center; font-family:var(--f-mono); font-weight:600; font-size:18px; color:var(--mustard-dark)}
+.rtable{width:100%; border-collapse:collapse; margin:14px 0; font-size:14px}
+.rtable td{padding:7px 4px; border-top:1px solid var(--line); vertical-align:middle}
+.rtable td:last-child{text-align:right; font-family:var(--f-mono); white-space:nowrap}
+.rtable .ok{color:var(--good); font-weight:800}
+.rtable .no{color:var(--bad); font-weight:800}
+.lesson{background:var(--surface2); border-radius:12px; padding:12px 14px; font-size:14px; margin:10px 0}
+.lesson b{display:block; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); margin-bottom:2px}
+.modal-actions{display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:16px}
+.simline{font-size:13.5px; color:var(--muted); text-align:center}
+
+/* daily */
+.daily{display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:16px; align-items:start}
+.daily-intro h2, .daily-round h2{font-family:var(--f-display); font-weight:400; font-size:28px; line-height:1.08; margin:4px 0 8px}
+.scoreboard{display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:14px 0}
+.timer{height:10px; border-radius:99px; background:var(--surface2); overflow:hidden; border:1px solid var(--line)}
+.timer i{display:block; height:100%; background:var(--good); width:100%}
+.timer.low i{background:var(--bad)}
+.round-meta{display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; flex-wrap:wrap}
+.combo{font-family:var(--f-display); font-size:18px; color:var(--ticket)}
+.combo.bump{animation:pop .4s cubic-bezier(.2,1.6,.4,1)}
+.feedback{min-height:28px; font-weight:800; font-size:16px; margin-top:10px}
+.feedback.good{color:var(--good)} .feedback.meh{color:var(--warn)} .feedback.bad{color:var(--bad)}
+.dots{display:flex; gap:6px}
+.dots i{width:14px; height:14px; border-radius:4px; background:var(--surface2); border:1px solid var(--line)}
+.dots i.p{background:var(--good); border-color:var(--good)} .dots i.o{background:var(--mustard); border-color:var(--mustard)} .dots i.x{background:var(--bad); border-color:var(--bad)} .dots i.cur{border:2px solid var(--ink)}
+.bigscore{font-family:var(--f-display); font-size:46px; line-height:1; color:var(--ticket)}
+.sharebox{font-family:var(--f-mono); font-size:13px; white-space:pre-wrap; background:var(--surface2); border-radius:10px; padding:10px 12px; margin-top:10px; user-select:all}
+
+/* calculator */
+.calc{display:grid; grid-template-columns:minmax(0,340px) minmax(0,1fr); gap:16px; align-items:start}
+.seg{display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:4px; padding:4px; background:var(--surface2); border-radius:12px; border:1px solid var(--line)}
+.seg button{border:0; background:none; border-radius:9px; padding:8px 2px; font-family:var(--f-mono); font-weight:600; font-size:13px}
+.seg button[aria-pressed="true"]{background:var(--ink); color:var(--surface)}
+.field{display:grid; gap:4px; margin-top:12px}
+.field label{font-weight:700; font-size:14px}
+.field .sub{font-size:12px; color:var(--muted); font-weight:500}
+.field input, .field select{width:100%; padding:10px 12px; border-radius:10px; border:1px solid var(--line); background:var(--surface2); color:var(--ink); font-family:var(--f-mono); font-size:15px}
+.calc-results{display:grid; gap:14px}
+.ctable{width:100%; border-collapse:collapse; font-size:14px}
+.ctable th{text-align:left; font-weight:600; padding:8px 6px; border-top:1px solid var(--line)}
+.ctable th span{display:block; font-family:var(--f-mono); font-size:12px; color:var(--muted); font-weight:500}
+.ctable td{text-align:right; padding:8px 6px; border-top:1px solid var(--line); font-family:var(--f-mono); font-variant-numeric:tabular-nums; white-space:nowrap}
+.ctable td small{display:block; color:var(--muted); font-size:12px}
+.tablewrap{overflow-x:auto}
+.calc-alert{padding:10px 12px; border-radius:10px; font-weight:700; font-size:14px}
+.calc-alert.bad{background:color-mix(in srgb, var(--bad) 14%, transparent); color:var(--bad)}
+.calc-alert.ok{background:color-mix(in srgb, var(--good) 14%, transparent); color:var(--good)}
+details.formulas summary{cursor:pointer; font-weight:700}
+details.formulas pre{font-family:var(--f-mono); font-size:13px; white-space:pre-wrap; background:var(--surface2); padding:12px; border-radius:10px; margin:10px 0 0}
+.pnchart svg{width:100%; height:auto; display:block}
+
+/* collection */
+.coll{display:grid; gap:18px}
+.ranks{display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px}
+.rankstep{padding:12px; border-radius:12px; border:1px solid var(--line); background:var(--surface)}
+.rankstep.cur{border:2px solid var(--ticket)}
+.rankstep.locked{opacity:.55}
+.rankstep b{display:block; font-family:var(--f-display); font-weight:400; font-size:15px}
+.badges{display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:10px}
+.badge{display:grid; grid-template-columns:44px minmax(0,1fr); gap:10px; align-items:center; padding:12px; border-radius:14px; background:var(--surface); border:1px solid var(--line)}
+.badge .medal{width:44px; height:44px; border-radius:50%; display:grid; place-items:center; background:var(--mustard); color:#2A1D00; font-family:var(--f-display); font-size:16px; box-shadow:inset 0 -3px 0 var(--mustard-dark)}
+.badge.locked .medal{background:var(--surface2); color:var(--muted); box-shadow:inset 0 -3px 0 var(--line)}
+.badge.locked{color:var(--muted)}
+.badge strong{display:block; line-height:1.2}
+.badge span{font-size:12.5px; color:var(--muted)}
+.deck{display:grid; grid-template-columns:repeat(auto-fill,minmax(250px,1fr)); gap:10px}
+.fcard{border-radius:14px; padding:14px; background:var(--led-bg); color:var(--led); min-height:130px}
+.fcard h3{font-family:var(--f-display); font-weight:400; font-size:15px; color:var(--led); margin-bottom:6px}
+.fcard pre{font-family:var(--f-mono); font-size:13px; white-space:pre-wrap; margin:0; color:var(--led)}
+.fcard p{font-size:12.5px; color:var(--led-label); margin:8px 0 0}
+.fcard.locked{background:var(--surface2); color:var(--muted); border:1px dashed var(--line)}
+.fcard.locked h3{color:var(--muted)}
+
+/* toast + confetti */
+.toasts{position:fixed; right:max(16px, env(safe-area-inset-right, 0px)); bottom:calc(16px + env(safe-area-inset-bottom, 0px)); display:grid; gap:8px; z-index:60; max-width:min(340px, calc(100vw - 32px))}
+.toast{background:var(--ink); color:var(--surface); padding:12px 14px; border-radius:12px; font-weight:700; box-shadow:0 10px 30px -10px rgba(0,0,0,.5); animation:rise .35s cubic-bezier(.2,1.3,.4,1); display:grid; grid-template-columns:auto minmax(0,1fr); gap:10px; align-items:center}
+.toast .medal{width:32px; height:32px; border-radius:50%; background:var(--mustard); display:grid; place-items:center; color:#2A1D00; font-family:var(--f-display); font-size:13px}
+.toast small{display:block; font-weight:500; opacity:.8}
+#confetti{position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:70}
+.foot{margin-top:28px; font-size:13px; color:var(--muted); max-width:70ch}
+
+@media (max-width:860px){
+  .hero, .level, .daily, .calc{grid-template-columns:minmax(0,1fr)}
+  nav.tabs button{padding:8px 10px; font-size:14px}
+  .rank{min-width:130px}
+  .level{grid-template-areas:"brief" "scene" "controls" "readouts"}
+  canvas.scene{height:260px}
+}
+@media (prefers-reduced-motion: reduce){
+  *{animation:none!important; transition:none!important}
+  .bigstars svg{transform:none}
+}
+</style>
+
+</head>
+<body>
+<div class="app" id="app">
+  <header class="top">
+    <button class="brand" id="brand" aria-label="Take a Number, back to levels">
+      <svg width="40" height="40" viewBox="0 0 40 40" aria-hidden="true"><path d="M4 9a3 3 0 0 1 3-3h26a3 3 0 0 1 3 3v6a5 5 0 0 0 0 10v6a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-6a5 5 0 0 0 0-10z" fill="var(--ticket)"/><path d="M14 8v24" stroke="var(--on-ticket)" stroke-width="1.6" stroke-dasharray="2.5 2.5"/><text x="26" y="25.5" text-anchor="middle" font-family="Bungee, Arial Black, sans-serif" font-size="12" fill="var(--on-ticket)">#</text></svg>
+      <span class="display">Take a Number</span>
+    </button>
+    <div class="player">
+      <div class="rank">
+        <div class="rank-row"><span id="rankName">Line Rookie</span><span class="mono muted" id="xpText">0 XP</span></div>
+        <div class="xpbar"><i id="xpFill"></i></div>
+      </div>
+      <span class="pill" title="Stars earned"><svg viewBox="0 0 24 24"><path class="star-on" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg><span id="starCount" class="mono">0/33</span></span>
+      <span class="pill" title="Daily Rush streak"><svg viewBox="0 0 24 24" fill="none" stroke="var(--ticket)" stroke-width="2.2"><path d="M12 3c1 3.5 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.5 1 2.5 2 3 0-3.2.4-5.8 1-8.5z"/></svg><span id="streakCount" class="mono">0</span></span>
+      <button class="iconbtn" id="soundBtn" aria-label="Sound on" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9h4l5-4v14l-5-4H4z"/><path id="soundWave" d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg></button>
+    </div>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" data-view="map" aria-selected="true">Levels</button>
+    <button role="tab" data-view="daily" aria-selected="false">Daily Rush</button>
+    <button role="tab" data-view="calc" aria-selected="false">Calculator</button>
+    <button role="tab" data-view="coll" aria-selected="false">Badges</button>
+  </nav>
+
+  <main>
+    <!-- MAP -->
+    <section id="view-map">
+      <div class="hero">
+        <div>
+          <div class="eyebrow">Queueing theory, played</div>
+          <h1>Every line has math behind it. <em>Beat the wait.</em></h1>
+          <p>Run a coffee cart, a bank, a food truck, a car wash and a stadium. Tune your staff and speed, watch the line react live, and hit each ticket's targets for three stars. Every number comes from the real formulas.</p>
+          <div class="actions">
+            <button class="btn btn-go" id="continueBtn">Play level 1</button>
+            <button class="btn btn-ghost" data-goto="daily">Today's Daily Rush</button>
+          </div>
+        </div>
+        <div class="legend" aria-label="Key symbols">
+          <div class="row"><b>λ</b><span>Arrival rate. How many customers show up per hour, on average.</span></div>
+          <div class="row"><b>μ</b><span>Service rate. How many customers one server can finish per hour.</span></div>
+          <div class="row"><b>ρ</b><span>Utilization, λ ÷ (servers × μ). At 100% or more, the line never ends.</span></div>
+          <div class="row"><b>W<sub>q</sub></b><span>Average wait in line before service starts.</span></div>
+        </div>
+      </div>
+      <div id="worlds"></div>
+    </section>
+
+    <!-- LEVEL -->
+    <section id="view-level" hidden>
+      <div class="level">
+        <div class="card brief">
+          <button class="btn btn-ghost btn-sm back" id="backBtn">← All levels</button>
+          <div class="eyebrow" id="lvEyebrow">Ticket 01 · M/M/1</div>
+          <h2 id="lvName">Opening Day</h2>
+          <p id="lvStory"></p>
+          <div class="chips" id="lvChips"></div>
+        </div>
+        <div class="controls">
+          <div class="card" id="lvLevers"></div>
+          <div class="card">
+            <div class="goals-head"><div><div class="eyebrow">Targets</div><strong>Meet goals to earn stars</strong></div><span class="stars" id="lvStars"></span></div>
+            <div id="lvGoals"></div>
+            <div class="cost-note" id="lvCostNote"></div>
+            <div class="warnline" id="lvWarn" hidden></div>
+          </div>
+        </div>
+        <div class="scenewrap">
+          <div class="scene-card">
+            <div class="scene-bar">
+              <div class="led-sign">NOW SERVING <b id="lvTicketNo">000</b></div>
+              <div class="scene-stats" id="lvStats"></div>
+            </div>
+            <div class="shiftbar"><i id="lvShiftFill"></i></div>
+            <canvas class="scene" id="lvCanvas" aria-label="Animated simulation of the line"></canvas>
+            <div class="scene-foot">
+              <div class="speed" id="lvSpeed" aria-label="Simulation speed"><button data-s="1" aria-pressed="true">1×</button><button data-s="2" aria-pressed="false">2×</button><button data-s="4" aria-pressed="false">4×</button></div>
+              <button class="btn btn-go" id="openBtn">Open for business</button>
+            </div>
+          </div>
+        </div>
+        <div class="card readouts-card">
+          <div class="eyebrow" style="margin-bottom:8px">Exact results from the formulas</div>
+          <div class="readouts" id="lvReadouts"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DAILY -->
+    <section id="view-daily" hidden>
+      <div class="daily">
+        <div class="card" id="dailyPanel"></div>
+        <div class="scenewrap">
+          <div class="scene-card">
+            <div class="scene-bar">
+              <div class="led-sign">NOW SERVING <b id="dyTicketNo">000</b></div>
+              <div class="scene-stats" id="dyStats"></div>
+            </div>
+            <canvas class="scene" id="dyCanvas" aria-label="Animated simulation of the line"></canvas>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CALCULATOR -->
+    <section id="view-calc" hidden>
+      <div class="calc">
+        <div class="card">
+          <div class="eyebrow">Queueing calculator</div>
+          <h2 class="display" style="font-size:24px; margin:4px 0 12px">Your numbers</h2>
+          <div class="seg" id="cModel" role="group" aria-label="Queue model">
+            <button data-m="MM1" aria-pressed="true">M/M/1</button><button data-m="MMc" aria-pressed="false">M/M/c</button><button data-m="MM1K" aria-pressed="false">M/M/1/K</button><button data-m="MD1" aria-pressed="false">M/D/1</button>
+          </div>
+          <p class="muted" id="cModelDesc" style="font-size:13.5px; margin:10px 0 0"></p>
+          <div class="field"><label for="cUnit">Rates are per</label><select id="cUnit"><option value="s">second</option><option value="min">minute</option><option value="h" selected>hour</option><option value="d">day</option></select></div>
+          <div class="field"><label for="cLam">Arrival rate λ <span class="sub">customers per <span class="uname">hour</span></span></label><input id="cLam" type="number" inputmode="decimal" min="0" step="any" value="12"></div>
+          <div class="field"><label for="cMu">Service rate μ <span class="sub">per server, per <span class="uname">hour</span></span></label><input id="cMu" type="number" inputmode="decimal" min="0" step="any" value="20"></div>
+          <div class="field" id="cCwrap" hidden><label for="cC">Servers c</label><input id="cC" type="number" inputmode="numeric" min="1" step="1" value="2"></div>
+          <div class="field" id="cKwrap" hidden><label for="cK">System capacity K <span class="sub">max people inside, including the one being served</span></label><input id="cK" type="number" inputmode="numeric" min="1" step="1" value="5"></div>
+          <div class="field"><label for="cN">n for P(n) <span class="sub">probability of exactly n customers</span></label><input id="cN" type="number" inputmode="numeric" min="0" step="1" value="2"></div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:14px">
+            <button class="btn btn-ghost btn-sm" id="cCopy">Copy results</button>
+            <button class="btn btn-ghost btn-sm" id="cExample">Load an example</button>
+          </div>
+        </div>
+        <div class="calc-results">
+          <div class="calc-alert" id="cAlert"></div>
+          <div class="card">
+            <div class="tablewrap"><table class="ctable" id="cTable"></table></div>
+          </div>
+          <div class="card pnchart">
+            <div class="eyebrow" style="margin-bottom:6px">Probability of n customers in the system</div>
+            <div id="cChart"></div>
+          </div>
+          <div class="scene-card">
+            <div class="scene-bar">
+              <div class="led-sign">NOW SERVING <b id="caTicketNo">000</b></div>
+              <div class="scene-stats" id="caStats"></div>
+            </div>
+            <canvas class="scene" id="caCanvas" aria-label="Animated simulation of the line"></canvas>
+          </div>
+          <div class="card"><details class="formulas"><summary>Formulas for this model</summary><pre id="cFormulas"></pre></details></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLLECTION -->
+    <section id="view-coll" hidden>
+      <div class="coll">
+        <div class="card"><div class="eyebrow">Rank ladder</div><div class="ranks" id="ranks" style="margin-top:10px"></div></div>
+        <div><div class="eyebrow" style="margin-bottom:8px">Badges</div><div class="badges" id="badges"></div></div>
+        <div><div class="eyebrow" style="margin-bottom:8px">Formula deck · clear a world to unlock its card</div><div class="deck" id="deck"></div></div>
+        <div><button class="btn btn-ghost btn-sm" id="resetBtn">Reset my progress</button> <span class="muted" id="resetMsg" style="font-size:13px"></span></div>
+      </div>
+    </section>
+  </main>
+  <p class="foot">Assumes Poisson arrivals, first-come first-served, and one shared line. M/M models use exponential service times; M/D/1 uses a fixed service time. Your progress is saved in this browser only.</p>
+</div>
+
+<div class="modal-bg" id="modalBg" hidden><div class="modal" id="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"></div></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<canvas id="confetti" aria-hidden="true"></canvas>
+
+<script>
+/* ================= Utilities ================= */
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const TAU=Math.PI*2;
+const reduceMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hashStr(s){let h=1779033703^s.length;for(let i=0;i<s.length;i++){h=Math.imul(h^s.charCodeAt(i),3432918353);h=h<<13|h>>>19}return h>>>0}
+function fmtMin(m){ if(!isFinite(m)) return '∞'; if(m<1) return Math.round(m*60)+' s'; if(m<10) return m.toFixed(1)+' min'; if(m<120) return Math.round(m)+' min'; return (m/60).toFixed(1)+' h'; }
+function fmtNum(x,d=2){ if(!isFinite(x)) return '∞'; return Math.abs(x)>=1000? Math.round(x).toLocaleString('en-US') : x.toFixed(d); }
+function sig(x){ if(!isFinite(x)) return '∞'; if(x===0) return '0'; const a=Math.abs(x); if(a>=1000) return x.toLocaleString('en-US',{maximumFractionDigits:1}); if(a>=1) return (+x.toFixed(4)).toString(); return (+x.toPrecision(4)).toString(); }
+function todayKey(d=new Date()){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+function starSVG(on,cls=''){ return `<svg viewBox="0 0 24 24" class="${cls}" aria-hidden="true"><path class="${on?'star-on':'star-off'}" d="M12 2.5l2.9 6.1 6.6.8-4.9 4.6 1.3 6.6L12 17.3l-5.9 3.3 1.3-6.6L2.5 9.4l6.6-.8z"/></svg>`; }
+function starsHTML(n,total=3){ let s=''; for(let i=0;i<total;i++) s+=starSVG(i<n); return `<span class="stars" aria-label="${n} of ${total} stars">${s}</span>`; }
+
+/* ================= Queue math ================= */
+// Rates per hour in the game. Returns time values in the same unit as 1/rate.
+function solve(model,p){
+  const lam=+p.lam, mu=+p.mu, c=Math.max(1,Math.round(p.c||1)), K=Math.max(1,Math.round(p.K||1));
+  const a=lam/mu; const r={model,lam,mu,c,K,a,stable:true,pn:null};
+  const INF={L:Infinity,Lq:Infinity,W:Infinity,Wq:Infinity,P0:0,Pwait:1,Pblock:0};
+  if(model==='MM1'||model==='MD1'){
+    const rho=a; r.rho=rho; r.util=Math.min(1,rho); r.servers=1;
+    if(rho>=1){ r.stable=false; return Object.assign(r,INF,{lamEff:mu}); }
+    r.P0=1-rho; r.Pwait=rho; r.Pblock=0; r.lamEff=lam;
+    r.Lq = model==='MM1' ? rho*rho/(1-rho) : rho*rho/(2*(1-rho));
+    r.L=r.Lq+rho; r.Wq=r.Lq/lam; r.W=r.Wq+1/mu;
+    if(model==='MM1') r.pn=n=>(1-rho)*Math.pow(rho,n);
+    return r;
+  }
+  if(model==='MMc'){
+    const rho=a/c; r.rho=rho; r.util=Math.min(1,rho); r.servers=c;
+    if(rho>=1){ r.stable=false; return Object.assign(r,INF,{lamEff:c*mu}); }
+    let term=1,sum=0; for(let n=0;n<c;n++){ sum+=term; term*=a/(n+1); }
+    const tc=term, last=tc/(1-rho), P0=1/(sum+last), C=last*P0;
+    r.P0=P0; r.Pwait=C; r.Pblock=0; r.lamEff=lam;
+    r.Lq=C*rho/(1-rho); r.Wq=r.Lq/lam; r.W=r.Wq+1/mu; r.L=r.Lq+a;
+    r.pn=n=>{ if(n<c){ let t=1; for(let i=1;i<=n;i++) t*=a/i; return t*P0; } return tc*Math.pow(rho,n-c)*P0; };
+    return r;
+  }
+  if(model==='MM1K'){
+    const rho=a; r.rho=rho; r.servers=1;
+    const one=Math.abs(rho-1)<1e-9;
+    const P0= one ? 1/(K+1) : (1-rho)/(1-Math.pow(rho,K+1));
+    const L = one ? K/2 : rho/(1-rho)-(K+1)*Math.pow(rho,K+1)/(1-Math.pow(rho,K+1));
+    const pn=n=> n<0||n>K ? 0 : (one ? 1/(K+1) : P0*Math.pow(rho,n));
+    const PK=pn(K), lamEff=lam*(1-PK);
+    r.P0=P0; r.Pblock=PK; r.lamEff=lamEff; r.L=L; r.Lq=Math.max(0,L-(1-P0));
+    r.W=L/lamEff; r.Wq=r.Lq/lamEff; r.util=1-P0; r.pn=pn;
+    r.Pwait = PK<1 ? (1-P0-PK)/(1-PK) : 1;
+    return r;
+  }
+}
+
+// Fast event simulation of a long day for the results screen.
+function simulateDay(model,p,N=4000,seed=Date.now()){
+  const rnd=mulberry32(seed), ex=rate=>-Math.log(1-rnd())/rate;
+  const c=model==='MMc'?Math.round(p.c):1, cap=model==='MM1K'?Math.round(p.K):Infinity, det=model==='MD1';
+  const free=new Array(c).fill(0); const deps=[]; let t=0, waitSum=0, served=0, blocked=0, maxLine=0;
+  for(let i=0;i<N;i++){
+    t+=ex(p.lam);
+    if(cap<Infinity){ while(deps.length && deps[0]<=t) deps.shift(); if(deps.length>=cap){ blocked++; continue; } }
+    let k=0; for(let j=1;j<c;j++) if(free[j]<free[k]) k=j;
+    const start=Math.max(t,free[k]); const svc=det?1/p.mu:ex(p.mu);
+    free[k]=start+svc; waitSum+=start-t; served++;
+    if(cap<Infinity){ deps.push(free[k]); maxLine=Math.max(maxLine,deps.length); }
+  }
+  return {served, blocked, arrivals:N, avgWqMin: served? waitSum/served*60 : 0, hours:t};
+}
+
+/* ================= Persistence ================= */
+const KEY='take-a-number.v1';
+const DEFAULT_STATE={xp:0, stars:{}, badges:{}, sound:true, daily:{best:{}, last:null, streak:0}, calcModels:{}, seenIntro:false};
+let S;
+try{ S=Object.assign(structuredClone(DEFAULT_STATE), JSON.parse(localStorage.getItem(KEY)||'{}')); }catch(e){ S=structuredClone(DEFAULT_STATE); }
+S.daily=Object.assign({best:{},last:null,streak:0},S.daily||{});
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(S)); }catch(e){} }
+
+/* ================= Sound ================= */
+const Sound={ctx:null,
+  ensure(){ if(!this.ctx){ try{ this.ctx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ this.ctx=null; } } if(this.ctx && this.ctx.state==='suspended') this.ctx.resume(); },
+  tone(f,d=.08,type='square',v=.05,delay=0){ if(!S.sound) return; this.ensure(); const c=this.ctx; if(!c) return; const t=c.currentTime+delay; const o=c.createOscillator(), g=c.createGain(); o.type=type; o.frequency.setValueAtTime(f,t); g.gain.setValueAtTime(.0001,t); g.gain.exponentialRampToValueAtTime(v,t+.01); g.gain.exponentialRampToValueAtTime(.0001,t+d); o.connect(g); g.connect(c.destination); o.start(t); o.stop(t+d+.03); },
+  tick(){ this.tone(1320,.07,'triangle',.07); this.tone(1980,.06,'triangle',.04,.05); },
+  untick(){ this.tone(300,.08,'triangle',.04); },
+  click(){ this.tone(700,.025,'square',.018); },
+  star(i){ this.tone([784,988,1319][i]||1319,.22,'triangle',.09); this.tone(([784,988,1319][i]||1319)*2,.12,'sine',.03,.03); },
+  fanfare(){ [523,659,784,1047,1319].forEach((f,i)=>this.tone(f,.18,'square',.035,i*.08)); },
+  fail(){ this.tone(330,.18,'sawtooth',.03); this.tone(247,.3,'sawtooth',.03,.16); },
+  serve(){ this.tone(1568,.035,'sine',.018); },
+  buzz(){ this.tone(160,.25,'sawtooth',.04); },
+  combo(n){ [659,880,1175].slice(0,n).forEach((f,i)=>this.tone(f,.1,'square',.03,i*.05)); }
+};
+let lastServeSound=0;
+document.addEventListener('pointerdown',()=>Sound.ensure(),{once:true});
+
+/* ================= Data ================= */
+const WORLDS=[
+  {name:'The Coffee Cart', tag:'M/M/1', blurb:'One barista, one line. Customers arrive at random and drinks take a random amount of time.'},
+  {name:'The Bank', tag:'M/M/c', blurb:'Several tellers share a single line. The next free teller calls the next customer.'},
+  {name:'The Food Truck', tag:'M/M/1/K', blurb:'Limited curb space. When every spot is taken, new customers walk away.'},
+  {name:'The Car Wash', tag:'M/D/1', blurb:'One machine with a fixed wash cycle. Arrivals are random, service time is not.'},
+  {name:'The Stadium', tag:'M/M/c', blurb:'The final ticket. 600 hungry fans an hour at halftime.'}
+];
+const LEVELS=[
+  {world:0,name:'Opening Day',model:'MM1',fixed:{lam:12},
+   story:'Your coffee cart opens. About 12 customers an hour wander up. Hire a barista fast enough to keep the line short, but not so fast they stand around idle.',
+   levers:[{key:'mu',label:'Barista speed',unit:'drinks/hr',min:6,max:40,step:1,start:10}],
+   goals:[{k:'Wq',op:'<=',v:10},{k:'Wq',op:'<=',v:4},{k:'rho',op:'>=',v:50}],
+   lesson:'Utilization is ρ = λ/μ. As ρ approaches 100%, the average wait shoots toward infinity, so a little spare capacity buys a lot of calm.'},
+  {world:0,name:'Morning Rush',model:'MM1',fixed:{lam:30},
+   story:'Commuters arrive 30 an hour. Faster baristas cost more. Find the speed that keeps the crowd small and the wait short without blowing the wage budget.',
+   levers:[{key:'mu',label:'Barista speed',unit:'drinks/hr',min:20,max:80,step:1,start:32}],
+   cost:p=>.5*p.mu, costNote:'Barista pay: $0.50 per hour for each drink per hour of speed.',
+   goals:[{k:'L',op:'<=',v:4},{k:'Wq',op:'<=',v:3},{k:'cost',op:'<=',v:25}],
+   lesson:"Little's Law: L = λW. The number of people at your cart equals the arrival rate times how long each one stays."},
+  {world:0,name:'Full Capacity?',model:'MM1',fixed:{mu:40},
+   story:'Your star barista makes 40 drinks an hour. Hand out flyers to bring in more customers, but keep the wait under 3 minutes. How busy can one person get?',
+   levers:[{key:'lam',label:'Customers you attract',unit:'per hr',min:5,max:39,step:1,start:10}],
+   goals:[{k:'lam',op:'>=',v:20},{k:'Wq',op:'<=',v:3},{k:'lam',op:'>=',v:26}],
+   lesson:'At 65% busy, one server already makes people wait almost 3 minutes. Throughput and short lines pull against each other.'},
+  {world:1,name:'Teller Trouble',model:'MMc',fixed:{lam:40,mu:15},
+   story:'Forty customers an hour, and each teller handles 15. Decide how many windows to open.',
+   levers:[{key:'c',label:'Tellers open',unit:'tellers',min:1,max:8,step:1,start:2}],
+   cost:p=>20*p.c, costNote:'Each teller costs $20 per hour.',
+   goals:[{k:'Wq',op:'<=',v:10},{k:'Pwait',op:'<=',v:40},{k:'cost',op:'<=',v:80}],
+   lesson:'Erlang C gives the chance an arrival finds every teller busy. Going from 3 to 4 tellers cuts it from 80% to 38%.'},
+  {world:1,name:'Pension Day',model:'MMc',fixed:{lam:90},
+   story:'Ninety customers an hour. You can hire more tellers or train them to be faster. Both cost money. Find the cheapest mix that still meets the targets.',
+   levers:[{key:'c',label:'Tellers open',unit:'tellers',min:1,max:12,step:1,start:5},{key:'mu',label:'Teller speed (training)',unit:'per hr each',min:8,max:20,step:1,start:12}],
+   cost:p=>p.c*(10+1.5*p.mu), costNote:'Each teller costs $10/hr plus $1.50/hr for each customer per hour of speed.',
+   goals:[{k:'Wq',op:'<=',v:3},{k:'Pwait',op:'<=',v:40},{k:'cost',op:'<=',v:250}],
+   lesson:'Headcount and speed trade off. The cheapest answer here is 7 well-trained tellers, not a crowd of slow ones.'},
+  {world:1,name:'Pool Party',model:'MMc',fixed:{lam:120,mu:25},
+   story:'Downtown branch: 120 customers an hour, 25 per teller. Headquarters wants tellers busy at least 75% of the time, and customers barely waiting.',
+   levers:[{key:'c',label:'Tellers open',unit:'tellers',min:1,max:12,step:1,start:3}],
+   goals:[{k:'Wq',op:'<=',v:1.5},{k:'rho',op:'>=',v:75},{k:'Pwait',op:'<=',v:55}],
+   lesson:'Pooling: one shared line feeding many tellers keeps staff 80% busy and waits near a minute. Big pools are efficient.'},
+  {world:2,name:'Curb Appeal',model:'MM1K',fixed:{lam:30,mu:36},
+   story:'Your taco truck serves 36 an hour and 30 show up. Every curb spot needs a permit. If all spots are full, hungry people leave.',
+   levers:[{key:'K',label:'Curb spots (incl. the window)',unit:'spots',min:1,max:15,step:1,start:2}],
+   cost:p=>3*p.K, costNote:'Each spot needs a $3/hr parking permit.',
+   goals:[{k:'Pblock',op:'<=',v:10},{k:'Pblock',op:'<=',v:5},{k:'cost',op:'<=',v:24}],
+   lesson:'With room for K people, anyone who arrives to find K already there walks away. That share is P(K), the blocking probability.'},
+  {world:2,name:'Lunch Line Limit',model:'MM1K',fixed:{lam:40},
+   story:'Forty customers an hour at lunch. Pick your cook speed and your curb space. Lose almost no one, keep waits short, stay on budget.',
+   levers:[{key:'mu',label:'Cook speed',unit:'orders/hr',min:20,max:60,step:1,start:30},{key:'K',label:'Curb spots',unit:'spots',min:1,max:10,step:1,start:3}],
+   cost:p=>.5*p.mu+2*p.K, costNote:'Cook pay is $0.50/hr per order-per-hour of speed. Each spot is $2/hr.',
+   goals:[{k:'Pblock',op:'<=',v:5},{k:'Wq',op:'<=',v:3},{k:'cost',op:'<=',v:39.5}],
+   lesson:'A capped line never explodes, even when λ > μ. Overload shows up as lost customers instead of endless waits.'},
+  {world:3,name:'Clockwork Wash',model:'MD1',fixed:{lam:10},
+   story:'Ten cars an hour roll in. Every wash takes exactly the same time. Choose the cycle speed.',
+   levers:[{key:'mu',label:'Wash speed',unit:'cars/hr',min:11,max:30,step:1,start:12}],
+   goals:[{k:'Wq',op:'<=',v:6},{k:'Wq',op:'<=',v:3},{k:'rho',op:'>=',v:55}],
+   lesson:'Pollaczek–Khinchine: with a fixed cycle, the line is half as long as with random service at the same speed.'},
+  {world:3,name:'Coupon Day',model:'MD1',fixed:{mu:20},
+   story:'Your wash runs a steady 3-minute cycle (20 cars an hour). Mail out coupons to bring in more cars, but keep the wait at 2 minutes or less.',
+   levers:[{key:'lam',label:'Cars you attract',unit:'per hr',min:2,max:19,step:1,start:4}],
+   goals:[{k:'lam',op:'>=',v:8},{k:'Wq',op:'<=',v:2},{k:'lam',op:'>=',v:11}],
+   lesson:'Consistency is capacity. A machine with no variation can run busier for the same wait.'},
+  {world:4,name:'Halftime Stampede',model:'MMc',fixed:{lam:600},
+   story:'600 fans an hour rush the concessions. Choose how many stands to open and how fast each one is. Card readers speed things up but cost extra.',
+   levers:[{key:'c',label:'Stands open',unit:'stands',min:1,max:30,step:1,start:10},{key:'mu',label:'Stand speed',unit:'fans/hr each',min:30,max:60,step:5,start:40}],
+   cost:p=>p.c*(12+.15*p.mu), costNote:'Each stand costs $12/hr plus $0.15/hr per fan-per-hour of speed.',
+   goals:[{k:'Wq',op:'<=',v:.5},{k:'Pwait',op:'<=',v:30},{k:'cost',op:'<=',v:275}],
+   lesson:'At big scale, faster stands beat more stands here. Call centers and hospitals size staff with this same Erlang C model.'}
+];
+LEVELS.forEach((l,i)=>{ l.idx=i; l.id='L'+(i+1); });
+const MAX_STARS=LEVELS.length*3;
+
+const METRICS={
+  Wq:{label:'Avg wait in line',sym:'Wq',fmt:fmtMin},
+  W:{label:'Avg time in system',sym:'W',fmt:fmtMin},
+  L:{label:'Avg people in system',sym:'L',fmt:v=>fmtNum(v,2)},
+  Lq:{label:'Avg line length',sym:'Lq',fmt:v=>fmtNum(v,2)},
+  rho:{label:'Staff busy',sym:'ρ',fmt:v=>isFinite(v)?v.toFixed(1)+'%':'∞'},
+  Pwait:{label:'Chance a customer waits',sym:'P(wait)',fmt:v=>v.toFixed(1)+'%'},
+  Pblock:{label:'Customers turned away',sym:'P(K)',fmt:v=>v.toFixed(1)+'%'},
+  cost:{label:'Hourly cost',sym:'$',fmt:v=>'$'+(v%1? v.toFixed(2): v.toFixed(0))},
+  lam:{label:'Customers per hour',sym:'λ',fmt:v=>Math.round(v)+'/hr'}
+};
+function metricVal(k,r,p,lvl){
+  switch(k){
+    case 'Wq': return r.Wq*60; case 'W': return r.W*60; case 'L': return r.L; case 'Lq': return r.Lq;
+    case 'rho': return (r.model==='MM1K'? r.util : r.rho)*100;
+    case 'Pwait': return r.Pwait*100; case 'Pblock': return r.Pblock*100;
+    case 'cost': return lvl&&lvl.cost? lvl.cost(p) : 0; case 'lam': return p.lam;
+  }
+}
+function goalText(g){ return `${METRICS[g.k].label} ${g.op==='<='?'≤':'≥'} ${METRICS[g.k].fmt(g.v)}`; }
+function goalMet(g,r,p,lvl){ if(!r.stable) return false; const v=metricVal(g.k,r,p,lvl); return g.op==='<='? v<=g.v+1e-9 : v>=g.v-1e-9; }
+function levelParams(lvl,vals){ const p=Object.assign({c:1,K:1},lvl.fixed,vals); return p; }
+
+/* ================= Ranks & badges ================= */
+const RANKS=[[0,'Line Rookie'],[250,'Ticket Taker'],[700,'Floor Manager'],[1400,'Flow Wizard'],[2500,"Erlang's Heir"]];
+const BADGES=[
+  {id:'first',name:'First Customer',desc:'Clear your first level.',m:'1'},
+  {id:'three',name:'Triple Star',desc:'Earn 3 stars on any level.',m:'3★'},
+  {id:'meltdown',name:'Meltdown',desc:'Let arrivals outpace service. The line never ends.',m:'∞'},
+  {id:'perfect5',name:'Perfectionist',desc:'3 stars on five different levels.',m:'5'},
+  {id:'allclear',name:'Every Ticket Punched',desc:'Earn at least 1 star on every level.',m:'11'},
+  {id:'gold',name:'Gold Standard',desc:'3 stars on every level.',m:'33'},
+  {id:'daily',name:'Rush Hour',desc:'Finish a Daily Rush.',m:'D'},
+  {id:'combo',name:'On a Roll',desc:'Hit a ×3 combo in Daily Rush.',m:'×3'},
+  {id:'flawless',name:'Flawless',desc:'Five perfect answers in one Daily Rush.',m:'5/5'},
+  {id:'streak3',name:'Regular',desc:'Play Daily Rush three days in a row.',m:'3d'},
+  {id:'lab',name:'Lab Coat',desc:'Try all four models in the calculator.',m:'4'},
+  {id:'erlang',name:"Erlang's Heir",desc:'Reach the top rank.',m:'AK'}
+];
+function rankFor(xp){ let i=0; RANKS.forEach((r,j)=>{ if(xp>=r[0]) i=j; }); return i; }
+function totalStars(){ return LEVELS.reduce((s,l)=>s+(S.stars[l.id]||0),0); }
+function award(id){
+  if(S.badges[id]) return; const b=BADGES.find(x=>x.id===id); if(!b) return;
+  S.badges[id]=Date.now(); save();
+  toast(`<span class="medal">${esc(b.m)}</span><div>Badge: ${esc(b.name)}<small>${esc(b.desc)}</small></div>`);
+  Sound.fanfare(); renderColl();
+}
+function addXP(n){
+  const before=rankFor(S.xp); S.xp+=n; save(); renderPlayer();
+  const after=rankFor(S.xp);
+  if(after>before){ setTimeout(()=>{ toast(`<span class="medal">↑</span><div>Rank up: ${esc(RANKS[after][1])}<small>${S.xp} XP</small></div>`); Sound.fanfare(); confetti(); },900); }
+  if(after===RANKS.length-1) award('erlang');
+}
+function checkLevelBadges(){
+  const vals=LEVELS.map(l=>S.stars[l.id]||0);
+  if(vals.some(v=>v>=1)) award('first');
+  if(vals.some(v=>v>=3)) award('three');
+  if(vals.filter(v=>v>=3).length>=5) award('perfect5');
+  if(vals.every(v=>v>=1)) award('allclear');
+  if(vals.every(v=>v>=3)) award('gold');
+}
+
+/* ================= UI shell ================= */
+function renderPlayer(){
+  const i=rankFor(S.xp), lo=RANKS[i][0], hi=RANKS[i+1]?RANKS[i+1][0]:lo;
+  $('#rankName').textContent=RANKS[i][1];
+  $('#xpText').textContent= RANKS[i+1]? `${S.xp} / ${hi} XP` : `${S.xp} XP`;
+  $('#xpFill').style.width= RANKS[i+1]? ((S.xp-lo)/(hi-lo)*100)+'%' : '100%';
+  $('#starCount').textContent=`${totalStars()}/${MAX_STARS}`;
+  $('#streakCount').textContent=S.daily.streak||0;
+  const sb=$('#soundBtn'); sb.setAttribute('aria-pressed',S.sound); sb.setAttribute('aria-label',S.sound?'Sound on':'Sound off'); $('#soundWave').style.opacity=S.sound?1:.15;
+}
+$('#soundBtn').onclick=()=>{ S.sound=!S.sound; save(); renderPlayer(); if(S.sound) Sound.tick(); };
+
+let currentView='map';
+function show(view){
+  if(view!=='level' && shift) endShift(true);
+  currentView=view;
+  ['map','level','daily','calc','coll'].forEach(v=>{ $('#view-'+v).hidden = v!==view; });
+  $$('nav.tabs button').forEach(b=>b.setAttribute('aria-selected', String(b.dataset.view===view || (view==='level'&&b.dataset.view==='map'))));
+  if(view==='map') renderMap();
+  if(view==='coll') renderColl();
+  if(view==='daily') renderDailyIntro();
+  if(view==='calc') calcUpdate();
+  try{ history.replaceState(null,'', view==='map'||view==='level' ? location.pathname : '#'+({daily:'daily',calc:'calculator',coll:'badges'}[view])); }catch(e){}
+  window.scrollTo({top:0});
+}
+$$('nav.tabs button').forEach(b=>b.onclick=()=>{ Sound.click(); show(b.dataset.view); });
+$$('[data-goto]').forEach(b=>b.onclick=()=>{ Sound.click(); show(b.dataset.goto); });
+$('#brand').onclick=()=>show('map');
+
+function toast(html,ms=3600){ const t=document.createElement('div'); t.className='toast'; t.innerHTML=html; $('#toasts').appendChild(t); setTimeout(()=>t.remove(),ms); }
+
+/* ================= Confetti ================= */
+const CF={cv:$('#confetti'),parts:[],running:false};
+function confetti(n=140){
+  if(reduceMotion()) return;
+  const cv=CF.cv, dpr=devicePixelRatio||1; cv.width=innerWidth*dpr; cv.height=innerHeight*dpr;
+  const cols=['#D93A33','#EFB12A','#16865A','#3A86C8','#8E6CC9','#FFFFFF'];
+  for(let i=0;i<n;i++) CF.parts.push({x:innerWidth/2+(Math.random()-.5)*160,y:innerHeight*.35,vx:(Math.random()-.5)*14,vy:-Math.random()*13-4,r:Math.random()*TAU,vr:(Math.random()-.5)*.4,w:6+Math.random()*6,h:4+Math.random()*5,c:cols[i%cols.length],life:0});
+  if(!CF.running){ CF.running=true; requestAnimationFrame(cfStep); }
+}
+function cfStep(){
+  const cv=CF.cv, ctx=cv.getContext('2d'), dpr=devicePixelRatio||1;
+  ctx.setTransform(dpr,0,0,dpr,0,0); ctx.clearRect(0,0,innerWidth,innerHeight);
+  CF.parts=CF.parts.filter(p=>p.y<innerHeight+30 && p.life<260);
+  for(const p of CF.parts){ p.vy+=.32; p.vx*=.99; p.x+=p.vx; p.y+=p.vy; p.r+=p.vr; p.life++; ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.r); ctx.fillStyle=p.c; ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h*Math.abs(Math.cos(p.life*.1))); ctx.restore(); }
+  if(CF.parts.length) requestAnimationFrame(cfStep); else { CF.running=false; ctx.clearRect(0,0,innerWidth,innerHeight); }
+}
+
+/* ================= Live queue scene ================= */
+const PEOPLE=['#D93A33','#E9A21F','#3A86C8','#8E6CC9','#1E9E7A','#D96B9E','#6F8F2E'];
+let TOK={}; let tokAt=0;
+function readTokens(){ const cs=getComputedStyle(document.documentElement); ['surface','surface2','ink','muted','line','good','warn','bad','ticket','mustard','staff'].forEach(k=>TOK[k]=cs.getPropertyValue('--'+k).trim()); }
+const SCENES=[];
+class Scene{
+  constructor(canvas,ticketEl,statsEl){
+    this.cv=canvas; this.ctx=canvas.getContext('2d'); this.ticketEl=ticketEl; this.statsEl=statsEl;
+    this.speed=1; this.p=null; this.model='MM1'; this.patience=5; this.onServe=null; this.domAt=0;
+    this.reset(); SCENES.push(this);
+    new ResizeObserver(()=>this.resize()).observe(canvas); this.resize();
+  }
+  reset(){ this.t=0; this.cust=[]; this.queue=[]; this.servers=[]; this.ticket=0; this.served=0; this.balked=0; this.overflow=0; this.waitSum=0; this.waitN=0; this.floats=[]; this.nextArr=null; if(this.p) this.setParams(this.model,this.p,true); }
+  resize(){ const dpr=devicePixelRatio||1, r=this.cv.getBoundingClientRect(); if(!r.width) return; this.W=r.width; this.H=r.height; this.cv.width=Math.round(r.width*dpr); this.cv.height=Math.round(r.height*dpr); this.ctx.setTransform(dpr,0,0,dpr,0,0); }
+  setParams(model,p,fresh){
+    this.model=model; this.p=Object.assign({},p);
+    const c= model==='MMc'? Math.max(1,Math.round(p.c)) : 1;
+    for(let i=0;i<this.servers.length && i<c;i++) this.servers[i].closing=false;
+    while(this.servers.length<c) this.servers.push({cust:null,end:0,start:0,closing:false,x:null});
+    for(let i=this.servers.length-1;i>=c;i--){ if(!this.servers[i].cust) this.servers.splice(i,1); else this.servers[i].closing=true; }
+    this.scale = Math.min(1.5/Math.max(p.lam,.01), 4/Math.max(p.mu,.01)); // sim hours per real second
+    this.nextArr = this.t + this.exp(p.lam);
+    // pull waiting customers onto any newly opened servers
+    this.servers.forEach(s=>{ if(!s.cust && !s.closing && this.queue.length) this.startService(s,this.queue.shift()); });
+  }
+  exp(rate){ return -Math.log(1-Math.random())/rate; }
+  svc(){ return this.model==='MD1'? 1/this.p.mu : this.exp(this.p.mu); }
+  inSystem(){ return this.queue.length + this.servers.filter(s=>s.cust).length; }
+  startService(s,c){ s.cust=c; s.start=this.t; s.end=this.t+this.svc(); c.state='service'; c.srv=s; this.ticket++; this.waitSum+=this.t-c.arr; this.waitN++; if(this.ticketEl){ this.ticketEl.textContent=String(this.ticket%1000).padStart(3,'0'); } }
+  advance(dtReal){
+    if(!this.p) return;
+    const tEnd=this.t+dtReal*this.speed*this.scale; let guard=0;
+    while(guard++<500){
+      let nt=this.nextArr, srv=null;
+      for(const s of this.servers) if(s.cust && s.end<nt){ nt=s.end; srv=s; }
+      if(nt>tEnd) break;
+      this.t=nt;
+      if(srv){ // departure
+        const c=srv.cust; c.state='leave'; c.srv=null; srv.cust=null; this.served++;
+        this.floats.push({x:srv.x||0,y:44,life:0});
+        if(this.onServe) this.onServe();
+        if(srv.closing){ this.servers.splice(this.servers.indexOf(srv),1); }
+        else if(this.queue.length) this.startService(srv,this.queue.shift());
+      } else { // arrival
+        this.nextArr=this.t+this.exp(this.p.lam);
+        const c={id:Math.random(),x:-14,y:(this.H||300)-16,arr:this.t,color:PEOPLE[Math.floor(Math.random()*PEOPLE.length)],state:'queue',age:0};
+        if(this.model==='MM1K' && this.inSystem()>=Math.round(this.p.K)){ c.state='balk'; this.balked++; this.cust.push(c); continue; }
+        if(this.queue.length>400){ this.overflow++; continue; }
+        this.cust.push(c);
+        const free=this.servers.find(s=>!s.cust && !s.closing);
+        if(free) this.startService(free,c); else this.queue.push(c);
+      }
+    }
+    if(guard<500) this.t=tEnd; else this.t=Math.max(this.t,tEnd);
+  }
+  frame(dt){
+    if(!this.W) this.resize(); if(!this.W) return;
+    this.advance(dt);
+    const ctx=this.ctx, W=this.W, H=this.H;
+    const n=Math.max(1,this.servers.length), spacing=Math.min(78,(W-24)/n), s=Math.max(.42,Math.min(1,spacing/62));
+    const cy=40, x0=W/2-spacing*(n-1)/2;
+    this.servers.forEach((sv,i)=>{ sv.x=x0+i*spacing; });
+    // queue slots
+    const qy=cy+66, rowH=24, slotW=21, perRow=Math.max(4,Math.floor((W-40)/slotW)), rows=Math.max(1,Math.floor((H-qy-6)/rowH)), maxSlots=perRow*rows;
+    const slot=i=>{ const k=Math.min(i,maxSlots-1), row=Math.floor(k/perRow), col=k%perRow; return {x: row%2===0? W-22-col*slotW : 22+col*slotW, y:qy+row*rowH}; };
+    const qIndex=new Map(); this.queue.forEach((c,i)=>qIndex.set(c,i));
+    const k=1-Math.exp(-dt*9);
+    for(const c of this.cust){
+      c.age+=dt; let tx,ty;
+      if(c.state==='queue'){ const sl=slot(qIndex.get(c)); tx=sl.x; ty=sl.y; c.hidden=qIndex.get(c)>=maxSlots; }
+      else if(c.state==='service'){ tx=c.srv.x; ty=cy+30; c.hidden=false; }
+      else if(c.state==='leave'){ tx=W+30; ty=cy+30; c.hidden=false; }
+      else { c.hidden=false; if(c.age<.7){ tx=54; ty=H-26; } else { tx=-40; ty=H-10; } }
+      c.x+=(tx-c.x)*k; c.y+=(ty-c.y)*k;
+    }
+    this.cust=this.cust.filter(c=> !(c.state==='leave' && c.x>W+20) && !(c.state==='balk' && c.age>2));
+    // draw
+    if(performance.now()-tokAt>500){ readTokens(); tokAt=performance.now(); }
+    ctx.clearRect(0,0,W,H);
+    const shake = !reduceMotion() && this.queue.length>maxSlots ? (Math.random()-.5)*2 : 0;
+    ctx.save(); ctx.translate(shake,0);
+    // stanchion ropes
+    ctx.strokeStyle=TOK.line; ctx.lineWidth=2; ctx.setLineDash([]);
+    for(let r=0;r<rows-1;r++){ const y=qy+r*rowH+rowH/2; ctx.beginPath(); if(r%2===0){ ctx.moveTo(30,y); ctx.lineTo(W-8,y); } else { ctx.moveTo(8,y); ctx.lineTo(W-30,y); } ctx.stroke(); }
+    // counters & staff
+    const cw=Math.max(4,Math.min(52,spacing-(spacing>30?10:3)));
+    this.servers.forEach(sv=>{
+      ctx.globalAlpha= sv.closing? .4 : 1;
+      this.person(sv.x,cy-17,9*s,TOK.staff,0,false,true);
+      ctx.fillStyle=TOK.surface2; ctx.strokeStyle=TOK.line; ctx.lineWidth=1.5; this.rrect(sv.x-cw/2,cy-6,cw,13,4); ctx.fill(); ctx.stroke();
+      ctx.globalAlpha=1;
+    });
+    // customers
+    for(const c of this.cust){
+      if(c.hidden) continue;
+      let mood=0, ring=null;
+      if(c.state==='queue'){ const w=(this.t-c.arr)*60/this.patience; mood= w<.5?0 : w<1?1:2; ring=[TOK.good,TOK.warn,TOK.bad][mood]; }
+      if(c.state==='balk'){ mood=2; }
+      const r = c.state==='service'? 9*s+1 : 8;
+      this.person(c.x,c.y,r,c.color,mood,ring);
+      if(c.state==='service' && c.srv){ const pr=Math.min(1,(this.t-c.srv.start)/Math.max(1e-9,c.srv.end-c.srv.start)); ctx.strokeStyle=TOK.mustard; ctx.lineWidth=3; ctx.beginPath(); ctx.arc(c.x,c.y,r+4,-Math.PI/2,-Math.PI/2+pr*TAU); ctx.stroke(); }
+      if(c.state==='balk'){ ctx.strokeStyle=TOK.bad; ctx.lineWidth=2.5; const d=5; ctx.beginPath(); ctx.moveTo(c.x-d,c.y-r-12-d); ctx.lineTo(c.x+d,c.y-r-12+d); ctx.moveTo(c.x+d,c.y-r-12-d); ctx.lineTo(c.x-d,c.y-r-12+d); ctx.stroke(); }
+    }
+    // floating +1s
+    ctx.font='700 12px '+getComputedStyle(document.body).fontFamily; ctx.textAlign='center';
+    this.floats=this.floats.filter(f=>f.life<1);
+    for(const f of this.floats){ f.life+=dt*1.4; ctx.globalAlpha=1-f.life; ctx.fillStyle=TOK.good; ctx.fillText('✓',f.x,f.y-f.life*26); }
+    ctx.globalAlpha=1;
+    const hiddenN=this.queue.length-maxSlots+this.overflow;
+    if(hiddenN>0){ ctx.font='800 14px '+getComputedStyle(document.body).fontFamily; ctx.textAlign='right'; ctx.fillStyle=TOK.bad; ctx.fillText(`+${hiddenN} more waiting`,W-12,H-8); }
+    ctx.restore();
+    // DOM stats
+    const now=performance.now();
+    if(this.statsEl && now-this.domAt>150){ this.domAt=now;
+      const avg=this.waitN? this.waitSum/this.waitN*60 : 0;
+      const clock=new Date(2026,0,1,9,0,0); clock.setSeconds(this.t*3600);
+      const hh=clock.getHours(), mm=String(clock.getMinutes()).padStart(2,'0');
+      this.statsEl.innerHTML=`<span><b>${(hh%12)||12}:${mm}</b> ${hh<12?'AM':'PM'}</span><span>In line <b>${this.queue.length+this.overflow}</b></span><span>Served <b>${this.served}</b></span>${this.model==='MM1K'?`<span>Walked away <b>${this.balked}</b></span>`:''}<span>Avg wait <b>${fmtMin(avg)}</b></span>`;
+    }
+  }
+  rrect(x,y,w,h,r){ const c=this.ctx; c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+  person(x,y,r,color,mood,ring,staff){
+    const c=this.ctx;
+    c.fillStyle=color; c.beginPath(); c.arc(x,y,r,0,TAU); c.fill();
+    if(ring){ c.strokeStyle=ring; c.lineWidth=2; c.beginPath(); c.arc(x,y,r+1.5,0,TAU); c.stroke(); }
+    if(r<5) return;
+    const ex=r*.36, ey=-r*.18, er=Math.max(1.4,r*.2);
+    c.fillStyle= staff? TOK.surface : '#fff';
+    c.beginPath(); c.arc(x-ex,y+ey,er,0,TAU); c.arc(x+ex,y+ey,er,0,TAU); c.fill();
+    c.fillStyle= staff? TOK.staff : '#1b1b1b';
+    c.beginPath(); c.arc(x-ex,y+ey,er*.5,0,TAU); c.arc(x+ex,y+ey,er*.5,0,TAU); c.fill();
+    c.strokeStyle= staff? TOK.surface : '#1b1b1b'; c.lineWidth=Math.max(1,r*.13); c.beginPath();
+    const my=y+r*.4, mw=r*.38;
+    if(mood===0){ c.arc(x,my-r*.12,mw,.2*Math.PI,.8*Math.PI); }
+    else if(mood===1){ c.moveTo(x-mw,my); c.lineTo(x+mw,my); }
+    else { c.arc(x,my+r*.22,mw,1.2*Math.PI,1.8*Math.PI); }
+    c.stroke();
+  }
+}
+let lastFrame=performance.now();
+function loop(now){
+  const dt=Math.min(.05,(now-lastFrame)/1000); lastFrame=now;
+  for(const sc of SCENES){ if(sc.cv.offsetParent!==null) sc.frame(dt); }
+  if(shift) shiftTick(dt);
+  requestAnimationFrame(loop);
+}
+
+/* ================= Map ================= */
+function unlocked(i){ return i===0 || (S.stars[LEVELS[i-1].id]||0)>=1; }
+function nextLevel(){ const i=LEVELS.findIndex((l,i)=>unlocked(i) && !(S.stars[l.id]>=1)); return i<0? LEVELS.findIndex(l=>(S.stars[l.id]||0)<3) : i; }
+function renderMap(){
+  const nx=nextLevel();
+  $('#continueBtn').textContent = nx<0? 'Replay any level' : (totalStars()? `Continue: ticket ${String(nx+1).padStart(2,'0')}` : 'Play ticket 01');
+  $('#continueBtn').onclick=()=>{ Sound.click(); openLevel(Math.max(0,nx)); };
+  $('#worlds').innerHTML=WORLDS.map((w,wi)=>{
+    const lv=LEVELS.filter(l=>l.world===wi);
+    return `<section class="world"><div class="world-head"><h2>${esc(w.name)}</h2><span class="model-tag">${w.tag}</span><p>${esc(w.blurb)}</p></div>
+    <div class="tickets">${lv.map(l=>{ const ok=unlocked(l.idx), st=S.stars[l.id]||0;
+      return `<button class="ticket ${l.idx===nx&&ok?'next':''}" data-l="${l.idx}" ${ok?'':'disabled'} aria-label="Ticket ${l.idx+1}: ${esc(l.name)}${ok?', '+st+' stars':', locked'}">
+        <span class="stub"><small>NO.</small><b>${String(l.idx+1).padStart(2,'0')}</b></span>
+        <span class="body"><strong>${esc(l.name)}</strong>${ok? starsHTML(st) : '<span class="muted" style="font-size:13px">Earn a star on the last ticket</span>'}</span></button>`; }).join('')}</div></section>`;
+  }).join('');
+  $$('#worlds .ticket').forEach(b=>b.onclick=()=>{ Sound.click(); openLevel(+b.dataset.l); });
+}
+
+/* ================= Level play ================= */
+let LV=null, lvVals={}, lvPrevMet=[], lvPrevStars=0, shift=null;
+const lvScene=new Scene($('#lvCanvas'),$('#lvTicketNo'),$('#lvStats'));
+lvScene.onServe=()=>{ if(shift){ const n=performance.now(); if(n-lastServeSound>120){ Sound.serve(); lastServeSound=n; } } };
+function openLevel(i){
+  LV=LEVELS[i]; lvVals={}; LV.levers.forEach(l=>lvVals[l.key]=l.start);
+  $('#lvEyebrow').textContent=`Ticket ${String(i+1).padStart(2,'0')} · ${WORLDS[LV.world].name} · ${WORLDS[LV.world].tag}`;
+  $('#lvName').textContent=LV.name; $('#lvStory').textContent=LV.story;
+  const f=LV.fixed, chips=[];
+  if(f.lam!=null) chips.push(`λ = ${f.lam} arrivals/hr`);
+  if(f.mu!=null) chips.push(`μ = ${f.mu} per hr${LV.model==='MMc'?' per server':''}`);
+  chips.push(`Best so far: ${S.stars[LV.id]||0}/3 stars`);
+  $('#lvChips').innerHTML=chips.map(c=>`<span class="chip">${esc(c)}</span>`).join('');
+  $('#lvLevers').innerHTML=`<div class="eyebrow" style="margin-bottom:8px">Your levers</div>`+LV.levers.map(l=>`
+    <div class="lever"><div class="lever-top"><label for="lv-${l.key}">${esc(l.label)}</label><span class="lever-val" id="lvv-${l.key}"></span></div>
+    <div class="lever-row"><button class="step" data-k="${l.key}" data-d="-1" aria-label="Decrease ${esc(l.label)}">−</button>
+    <input type="range" id="lv-${l.key}" min="${l.min}" max="${l.max}" step="${l.step}" value="${l.start}">
+    <button class="step" data-k="${l.key}" data-d="1" aria-label="Increase ${esc(l.label)}">+</button></div>
+    <div class="lever-hint" id="lvh-${l.key}"></div></div>`).join('');
+  LV.levers.forEach(l=>{ $('#lv-'+l.key).oninput=e=>{ lvVals[l.key]=+e.target.value; Sound.click(); levelUpdate(); }; });
+  $$('#lvLevers .step').forEach(b=>b.onclick=()=>{ const l=LV.levers.find(x=>x.key===b.dataset.k); const v=Math.min(l.max,Math.max(l.min,lvVals[l.key]+l.step*(+b.dataset.d))); lvVals[l.key]=v; $('#lv-'+l.key).value=v; Sound.click(); levelUpdate(); });
+  $('#lvGoals').innerHTML=LV.goals.map((g,i)=>`<div class="goal" id="g${i}"><span class="box"><svg viewBox="0 0 24 24" fill="none" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></span><span class="gtext">${esc(goalText(g))}</span><span class="now"></span></div>`).join('');
+  $('#lvCostNote').textContent=LV.costNote||'';
+  const wqGoals=LV.goals.filter(g=>g.k==='Wq').map(g=>g.v); lvScene.patience= wqGoals.length? Math.min(...wqGoals) : 5;
+  lvPrevMet=LV.goals.map(()=>null); lvPrevStars=-1;
+  lvScene.p=null; lvScene.reset();
+  setOpenBtn(false);
+  show('level');
+  levelUpdate(true);
+}
+function levelUpdate(silent){
+  const p=levelParams(LV,lvVals), r=solve(LV.model,p);
+  LV.levers.forEach(l=>{
+    const v=lvVals[l.key]; $('#lvv-'+l.key).innerHTML=`${v}<small>${esc(l.unit)}</small>`;
+    let h=''; if(l.key==='mu') h=`About ${fmtMin(60/v)} per ${LV.model==='MMc'?'customer at each station':'customer'}${LV.model==='MD1'?', every time':' on average'}.`;
+    if(l.key==='lam') h=`One arrival every ${fmtMin(60/v)} on average.`;
+    if(l.key==='K') h=`At most ${v} ${v===1?'person':'people'} at the truck, including the one ordering.`;
+    if(l.key==='c') h=`Total capacity ${Math.round(v*p.mu)} customers/hr.`;
+    $('#lvh-'+l.key).textContent=h;
+  });
+  // goals
+  let met=0;
+  LV.goals.forEach((g,i)=>{
+    const ok=goalMet(g,r,p,LV), el=$('#g'+i); if(ok) met++;
+    el.classList.toggle('met',ok);
+    const v=metricVal(g.k,r,p,LV);
+    el.querySelector('.now').textContent= r.stable? 'now '+METRICS[g.k].fmt(v) : 'no limit';
+    if(!silent && lvPrevMet[i]!==null && lvPrevMet[i]!==ok){ ok? Sound.tick() : Sound.untick(); }
+    lvPrevMet[i]=ok;
+  });
+  const st=$('#lvStars'); st.innerHTML=[0,1,2].map(i=>starSVG(i<met, (i<met && i>=lvPrevStars && lvPrevStars>=0)?'pop':'')).join('');
+  lvPrevStars=met;
+  const w=$('#lvWarn');
+  if(!r.stable){ w.hidden=false; w.textContent='Customers arrive faster than you can serve them (ρ ≥ 100%). The line grows forever.'; award('meltdown'); }
+  else w.hidden=true;
+  renderReadouts($('#lvReadouts'),r,p,LV,LV.goals.map(g=>g.k));
+  lvScene.setParams(LV.model,p);
+}
+function renderReadouts(el,r,p,lvl,keys){
+  const list=[['rho','Staff busy','ρ'],['L','Avg people in system','L'],['Lq','Avg line length','Lq'],['W','Avg time in system','W'],['Wq','Avg wait in line','Wq']];
+  list.push(r.model==='MM1K'? ['Pblock','Turned away','P(K)'] : ['Pwait','Chance of waiting','P(wait)']);
+  if(lvl && lvl.cost) list.push(['cost','Hourly cost','$/hr']);
+  el.innerHTML=list.map(([k,lbl,sym])=>{ const v=metricVal(k,r,p,lvl); const inf=!r.stable && ['L','Lq','W','Wq'].includes(k);
+    return `<div class="led-tile ${keys.includes(k)?'key':''} ${inf?'inf':''}"><span class="lbl">${lbl}</span><span class="val">${inf?'∞':METRICS[k].fmt(v)}</span><span class="sym">${sym}</span></div>`; }).join('');
+}
+$('#backBtn').onclick=()=>{ Sound.click(); show('map'); };
+$$('#lvSpeed button').forEach(b=>b.onclick=()=>{ lvScene.speed=+b.dataset.s; $$('#lvSpeed button').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); Sound.click(); });
+
+const SHIFT_SECONDS=12;
+function setOpenBtn(running){ const b=$('#openBtn'); b.textContent= running? 'Skip to closing' : 'Open for business'; b.classList.toggle('btn-gold',running); b.classList.toggle('btn-go',!running); }
+$('#openBtn').onclick=()=>{
+  Sound.ensure();
+  if(shift){ endShift(); return; }
+  lvScene.reset(); lvScene.setParams(LV.model,levelParams(LV,lvVals));
+  shift={t:0}; setOpenBtn(true); Sound.tone(880,.08,'square',.04); Sound.tone(1320,.12,'square',.04,.08);
+  $$('#lvLevers input, #lvLevers .step').forEach(x=>x.disabled=true);
+};
+function shiftTick(dt){ if(!shift) return; shift.t+=dt*lvScene.speed; $('#lvShiftFill').style.width=Math.min(100,shift.t/SHIFT_SECONDS*100)+'%'; if(shift.t>=SHIFT_SECONDS) endShift(); }
+function endShift(abort){
+  shift=null; setOpenBtn(false); $('#lvShiftFill').style.width='0';
+  $$('#lvLevers input, #lvLevers .step').forEach(x=>x.disabled=false);
+  if(abort) return;
+  finishLevel();
+}
+function finishLevel(){
+  const p=levelParams(LV,lvVals), r=solve(LV.model,p);
+  const res=LV.goals.map(g=>goalMet(g,r,p,LV)); const stars=res.filter(Boolean).length;
+  const prev=S.stars[LV.id]||0; let xp=0;
+  if(stars>prev){ xp=(stars-prev)*100 + (stars===3?50:0); S.stars[LV.id]=stars; } else xp= stars? 10 : 0;
+  save();
+  const sim=simulateDay(LV.model,p,4000);
+  const titles=['Line meltdown','One star','Two stars','Three stars!'];
+  const subs=['No targets met yet. Adjust your levers and reopen.','The doors are open. Tighten things up for more stars.','Nearly there. One target to go.','Every target met. Textbook queue management.'];
+  const nextOk = LV.idx<LEVELS.length-1 && unlocked(LV.idx+1);
+  modal(`<h2 id="modalTitle">${titles[stars]}</h2>
+    <div class="bigstars">${[0,1,2].map(i=>starSVG(i<stars)).join('')}</div>
+    <p class="simline" style="font-size:15px; color:var(--ink)">${subs[stars]}</p>
+    ${xp? `<div class="xpgain">+<span id="xpCount">0</span> XP${stars>prev? ' · new best':''}</div>`:''}
+    <table class="rtable">${LV.goals.map((g,i)=>`<tr><td><span class="${res[i]?'ok':'no'}">${res[i]?'✓':'✗'}</span> ${esc(goalText(g))}</td><td>${r.stable? METRICS[g.k].fmt(metricVal(g.k,r,p,LV)) : '∞'}</td></tr>`).join('')}</table>
+    <p class="simline">We also simulated a long day with ${sim.arrivals.toLocaleString('en-US')} arrivals: average wait ${fmtMin(sim.avgWqMin)}${LV.model==='MM1K'?`, ${(sim.blocked/sim.arrivals*100).toFixed(1)}% walked away`:''}. The formula predicts ${r.stable? fmtMin(r.Wq*60) : 'an endless line'}.</p>
+    <div class="lesson"><b>What this teaches</b>${esc(LV.lesson)}</div>
+    <div class="modal-actions"><button class="btn btn-ghost" id="mRetry">Try again</button>${nextOk?`<button class="btn btn-go" id="mNext">Next ticket</button>`:`<button class="btn btn-go" id="mMap">All levels</button>`}</div>`);
+  const svgs=$$('.bigstars svg');
+  svgs.forEach((s,i)=>{ if(i<stars){ setTimeout(()=>{ s.classList.add('in'); Sound.star(i); },350+i*380); } else { s.style.transform='scale(1)'; } });
+  if(reduceMotion()) svgs.forEach(s=>s.style.transform='scale(1)');
+  setTimeout(()=>{ if(stars===3){ confetti(); Sound.fanfare(); } else if(stars===0) Sound.fail(); }, 350+stars*380);
+  if(xp){ const el=$('#xpCount'); let v=0; const step=()=>{ v=Math.min(xp,v+Math.ceil(xp/30)); if(el) el.textContent=v; if(v<xp) requestAnimationFrame(step); }; setTimeout(step,500); addXP(xp); }
+  renderPlayer(); checkLevelBadges();
+  // unlock formula card when world cleared
+  const w=LV.world; if(LEVELS.filter(l=>l.world===w).every(l=>(S.stars[l.id]||0)>=1) && !S.badges['deck'+w]){ S.badges['deck'+w]=Date.now(); save(); setTimeout(()=>toast(`<span class="medal">ƒ</span><div>Formula card unlocked<small>${esc(DECK[w].title)}. See Badges.</small></div>`),1600); }
+  $('#mRetry').onclick=()=>{ closeModal(); lvScene.reset(); levelUpdate(true); };
+  const nb=$('#mNext'); if(nb) nb.onclick=()=>{ closeModal(); openLevel(LV.idx+1); };
+  const mb=$('#mMap'); if(mb) mb.onclick=()=>{ closeModal(); show('map'); };
+}
+function modal(html){ $('#modal').innerHTML=html; $('#modalBg').hidden=false; const f=$('#modal .btn-go')||$('#modal button'); if(f) setTimeout(()=>f.focus(),50); }
+function closeModal(){ $('#modalBg').hidden=true; }
+$('#modalBg').addEventListener('click',e=>{ if(e.target.id==='modalBg') closeModal(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape' && !$('#modalBg').hidden) closeModal(); });
+
+/* ================= Daily Rush ================= */
+const dyScene=new Scene($('#dyCanvas'),$('#dyTicketNo'),$('#dyStats'));
+let DY=null;
+function genDaily(key){
+  const rng=mulberry32(hashStr('take-a-number:'+key)), ri=(a,b)=>a+Math.floor(rng()*(b-a+1)), pick=a=>a[Math.floor(rng()*a.length)];
+  const types=['MMc','MM1','MM1K','MD1','MMc']; for(let i=types.length-1;i>0;i--){ const j=Math.floor(rng()*(i+1)); [types[i],types[j]]=[types[j],types[i]]; }
+  const places={MMc:['bank branch','pharmacy counter','DMV office','airport check-in','call center'],MM1:['coffee cart','ice cream window','ticket booth','bike repair stand'],MM1K:['food truck','drive-thru','tiny barbershop','ramen bar'],MD1:['car wash','photo booth','vending kiosk','ferris wheel']};
+  return types.map(t=>{
+    for(let tries=0;tries<50;tries++){
+      if(t==='MMc'){ const lam=ri(30,240), mu=ri(8,30), T=pick([1,2,3,4,5]); let ans=null; for(let c=1;c<=40;c++){ const r=solve('MMc',{lam,mu,c}); if(r.stable && r.Wq*60<=T){ ans=c; break; } } if(!ans||ans<2||ans>20) continue;
+        return {model:'MMc',place:pick(places.MMc),fixed:{lam,mu},key:'c',label:'Servers',unit:'open',min:1,max:Math.max(ans+5,10),start:1,metric:'Wq',T,ans,
+          text:`${lam} customers/hr, each server handles ${mu}/hr. Open the fewest servers so the average wait is ${fmtMin(T)} or less.`}; }
+      if(t==='MM1'||t==='MD1'){ const lam=ri(10,60), T=pick([1,2,3,5]); let ans=null; for(let mu=lam+1;mu<=lam*4;mu++){ const r=solve(t,{lam,mu}); if(r.Wq*60<=T){ ans=mu; break; } } if(!ans) continue;
+        return {model:t,place:pick(places[t]),fixed:{lam},key:'mu',label: t==='MD1'?'Cycle speed':'Server speed',unit:'per hr',min:lam+1,max:Math.max(ans+15,lam*2),start:lam+1,metric:'Wq',T,ans,
+          text:`${lam} arrivals/hr${t==='MD1'?', fixed service time':''}. Pick the slowest (cheapest) speed that keeps the average wait at ${fmtMin(T)} or less.`}; }
+      if(t==='MM1K'){ const lam=ri(10,50), mu=Math.round(lam*(.85+rng()*.5)), T=pick([3,5,10]); let ans=null; for(let K=1;K<=30;K++){ const r=solve('MM1K',{lam,mu,K}); if(r.Pblock*100<=T){ ans=K; break; } } if(!ans||ans>25||ans<2) continue;
+        return {model:'MM1K',place:pick(places.MM1K),fixed:{lam,mu},key:'K',label:'Spots',unit:'max inside',min:1,max:Math.max(ans+6,12),start:1,metric:'Pblock',T,ans,
+          text:`${lam} arrivals/hr, ${mu} served/hr. Use the fewest spots so no more than ${T}% of customers walk away.`}; }
+    }
+    return {model:'MMc',place:'bank branch',fixed:{lam:40,mu:15},key:'c',label:'Servers',unit:'open',min:1,max:10,start:1,metric:'Wq',T:2,ans:4,text:'40 customers/hr, each server handles 15/hr. Open the fewest servers so the average wait is 2.0 min or less.'};
+  });
+}
+const ROUND_SECONDS=20;
+function renderDailyIntro(){
+  if(DY && DY.active) return;
+  const key=todayKey(), best=S.daily.best[key];
+  DY={key, rounds:genDaily(key), i:0, score:0, combo:1, results:[], active:false, timer:null};
+  $('#dailyPanel').innerHTML=`<div class="eyebrow">Daily Rush · ${key}</div><h2>Five lines. Twenty seconds each.</h2>
+    <p>Everyone in the world gets the same five puzzles today. Find the exact minimum: the fewest servers, the slowest speed, or the smallest space that still hits the target. Fast, exact answers build a combo.</p>
+    <div class="scoreboard"><div class="led-tile"><span class="lbl">Today's best</span><span class="val">${best!=null?best:'—'}</span></div><div class="led-tile"><span class="lbl">Streak</span><span class="val">${S.daily.streak||0} ${S.daily.streak===1?'day':'days'}</span></div><div class="led-tile"><span class="lbl">Max combo</span><span class="val">×3</span></div></div>
+    <p class="muted" style="font-size:13.5px">Exact minimum: 100 points plus 5 per second left, times your combo. Works but not minimal: 30 points and the combo resets. Misses the target: 0.</p>
+    <button class="btn btn-go" id="dyStart">${best!=null?'Play again':'Start the rush'}</button>`;
+  $('#dyStart').onclick=()=>{ Sound.ensure(); DY.active=true; startRound(); };
+  const r0=DY.rounds[0]; dyScene.p=null; dyScene.reset(); dyScene.patience=r0.metric==='Wq'?r0.T:5; dyScene.setParams(r0.model,Object.assign({c:1,K:1},r0.fixed,{[r0.key]:r0.ans}));
+}
+function startRound(){
+  const R=DY.rounds[DY.i]; DY.val=R.start; DY.left=ROUND_SECONDS; DY.locked=false;
+  dyScene.p=null; dyScene.reset(); dyScene.patience= R.metric==='Wq'? Math.max(R.T,.5) : 5;
+  $('#dailyPanel').innerHTML=`<div class="round-meta"><div class="dots">${DY.rounds.map((_,i)=>`<i class="${DY.results[i]||''} ${i===DY.i?'cur':''}"></i>`).join('')}</div><span class="combo" id="dyCombo">×${DY.combo}</span><span class="mono" style="font-weight:600">${DY.score} pts</span></div>
+    <div class="timer" id="dyTimer"><i></i></div>
+    <div class="eyebrow" style="margin-top:12px">Round ${DY.i+1} of 5 · ${esc(R.place)} · ${({MMc:'M/M/c',MM1:'M/M/1',MM1K:'M/M/1/K',MD1:'M/D/1'})[R.model]}</div>
+    <h2>${esc(R.text)}</h2>
+    <div class="lever" style="margin-top:8px"><div class="lever-top"><label for="dyRange">${esc(R.label)}</label><span class="lever-val" id="dyVal"></span></div>
+      <div class="lever-row"><button class="step" id="dyMinus" aria-label="Decrease">−</button><input type="range" id="dyRange" min="${R.min}" max="${R.max}" step="1" value="${R.start}"><button class="step" id="dyPlus" aria-label="Increase">+</button></div></div>
+    <div class="scoreboard" style="grid-template-columns:repeat(2,minmax(0,1fr))"><div class="led-tile key"><span class="lbl">${R.metric==='Wq'?'Avg wait in line':'Walked away'}</span><span class="val" id="dyMetric"></span></div><div class="led-tile"><span class="lbl">Target</span><span class="val">${R.metric==='Wq'?'≤ '+fmtMin(R.T):'≤ '+R.T+'%'}</span></div></div>
+    <button class="btn btn-go" id="dyLock">Lock it in</button>
+    <div class="feedback" id="dyFeedback" aria-live="polite"></div>`;
+  const setV=v=>{ DY.val=Math.min(R.max,Math.max(R.min,v)); $('#dyRange').value=DY.val; dailyUpdate(); };
+  $('#dyRange').oninput=e=>{ Sound.click(); setV(+e.target.value); };
+  $('#dyMinus').onclick=()=>{ Sound.click(); setV(DY.val-1); }; $('#dyPlus').onclick=()=>{ Sound.click(); setV(DY.val+1); };
+  $('#dyLock').onclick=()=>lockRound(false);
+  dailyUpdate();
+  clearInterval(DY.timer);
+  DY.timer=setInterval(()=>{ if(DY.locked) return; DY.left-=.1; const t=$('#dyTimer'); if(!t){ clearInterval(DY.timer); return; } t.querySelector('i').style.width=Math.max(0,DY.left/ROUND_SECONDS*100)+'%'; t.classList.toggle('low',DY.left<6); if(DY.left<=5 && Math.abs(DY.left-Math.round(DY.left))<.05) Sound.tone(520,.05,'square',.02); if(DY.left<=0) lockRound(true); },100);
+}
+function dailyUpdate(){
+  const R=DY.rounds[DY.i], p=Object.assign({c:1,K:1},R.fixed,{[R.key]:DY.val}), r=solve(R.model,p);
+  $('#dyVal').innerHTML=`${DY.val}<small>${esc(R.unit)}</small>`;
+  const v= R.metric==='Wq'? (r.stable? fmtMin(r.Wq*60) : '∞') : (r.Pblock*100).toFixed(1)+'%';
+  const ok= R.metric==='Wq'? (r.stable && r.Wq*60<=R.T+1e-9) : r.Pblock*100<=R.T+1e-9;
+  const m=$('#dyMetric'); m.textContent=v; m.style.color= ok? 'var(--good)' : '';
+  dyScene.setParams(R.model,p);
+}
+function lockRound(timeout){
+  if(DY.locked) return; DY.locked=true; clearInterval(DY.timer);
+  const R=DY.rounds[DY.i], p=Object.assign({c:1,K:1},R.fixed,{[R.key]:DY.val}), r=solve(R.model,p);
+  const ok= R.metric==='Wq'? (r.stable && r.Wq*60<=R.T+1e-9) : r.Pblock*100<=R.T+1e-9;
+  const fb=$('#dyFeedback'); let pts=0, cls;
+  if(timeout && !ok){ cls='x'; fb.className='feedback bad'; fb.textContent=`Time's up. The minimum was ${R.ans}.`; DY.combo=1; Sound.buzz(); }
+  else if(ok && DY.val===R.ans){ pts=Math.round((100+5*Math.max(0,Math.ceil(DY.left)))*DY.combo); cls='p'; fb.className='feedback good'; fb.textContent=`Exact! +${pts}${DY.combo>1?` (×${DY.combo} combo)`:''}`; Sound.combo(DY.combo); Sound.tick(); if(DY.combo===3) award('combo'); DY.combo=Math.min(3,DY.combo+1); }
+  else if(ok){ pts=30; cls='o'; fb.className='feedback meh'; fb.textContent=`It works, but ${R.ans} was enough. +30`; DY.combo=1; Sound.untick(); }
+  else { cls='x'; fb.className='feedback bad'; fb.textContent=`Misses the target. The minimum was ${R.ans}.`; DY.combo=1; Sound.buzz(); }
+  DY.score+=pts; DY.results[DY.i]=cls;
+  const cEl=$('#dyCombo'); cEl.textContent='×'+DY.combo; cEl.classList.remove('bump'); void cEl.offsetWidth; cEl.classList.add('bump');
+  $$('#dailyPanel input, #dailyPanel .step').forEach(x=>x.disabled=true);
+  const b=$('#dyLock'); b.textContent= DY.i<4? 'Next round' : 'See results'; b.onclick=()=>{ Sound.click(); DY.i++; if(DY.i<5) startRound(); else endDaily(); };
+  DY.locked=true;
+}
+function endDaily(){
+  DY.active=false; const key=DY.key, prevBest=S.daily.best[key];
+  const perfect=DY.results.filter(x=>x==='p').length;
+  let xp=0; if(prevBest==null) xp=Math.round(DY.score/5)+25; else if(DY.score>prevBest) xp=Math.round((DY.score-prevBest)/5);
+  if(prevBest==null || DY.score>prevBest) S.daily.best[key]=DY.score;
+  if(S.daily.last!==key){ const y=new Date(); y.setDate(y.getDate()-1); S.daily.streak = S.daily.last===todayKey(y)? (S.daily.streak||0)+1 : 1; S.daily.last=key; }
+  save(); renderPlayer();
+  award('daily'); if(perfect===5) award('flawless'); if(S.daily.streak>=3) award('streak3');
+  if(xp) addXP(xp);
+  const grid=DY.results.map(x=>({p:'🟩',o:'🟨',x:'🟥'})[x]).join('');
+  const share=`Take a Number · Daily Rush ${key}\n${grid}  ${DY.score} pts`;
+  $('#dailyPanel').innerHTML=`<div class="eyebrow">Daily Rush · ${key} · complete</div><div class="bigscore" style="margin:8px 0">${DY.score}</div>
+    <div class="dots" style="margin-bottom:10px">${DY.results.map(x=>`<i class="${x}"></i>`).join('')}</div>
+    <p>${perfect} of 5 exact.${xp?` +${xp} XP.`:''} ${prevBest!=null && DY.score<=prevBest? `Your best today is still ${prevBest}.`:'New best for today.'} Streak: ${S.daily.streak} ${S.daily.streak===1?'day':'days'}. New puzzles tomorrow.</p>
+    <div class="sharebox" id="shareText">${esc(share)}</div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:12px"><button class="btn btn-gold" id="dyShare">Copy my result</button><button class="btn btn-ghost" id="dyAgain">Play again</button></div>`;
+  if(perfect>=4){ confetti(); Sound.fanfare(); }
+  $('#dyShare').onclick=()=>{ navigator.clipboard.writeText(share).then(()=>toast('<span class="medal">✓</span><div>Copied. Paste it anywhere.</div>'),()=>{ const r=document.createRange(); r.selectNodeContents($('#shareText')); const s=getSelection(); s.removeAllRanges(); s.addRange(r); toast('<span class="medal">!</span><div>Text selected. Press copy to share.</div>'); }); };
+  $('#dyAgain').onclick=()=>{ DY=null; renderDailyIntro(); };
+}
+
+/* ================= Calculator ================= */
+const caScene=new Scene($('#caCanvas'),$('#caTicketNo'),$('#caStats'));
+let cModel='MM1';
+const MODEL_DESC={MM1:'One server, random arrivals, random (exponential) service times, unlimited line.',MMc:'c identical servers sharing one line. Uses the Erlang C formula.',MM1K:'One server and room for at most K customers. Arrivals who find it full leave.',MD1:'One server with a fixed, constant service time. Random arrivals.'};
+const FORMULAS={
+  MM1:`ρ  = λ / μ                 (must be < 1)
+P0 = 1 − ρ
+Pn = (1 − ρ) ρⁿ
+L  = ρ / (1 − ρ)
+Lq = ρ² / (1 − ρ)
+W  = 1 / (μ − λ)
+Wq = λ / (μ (μ − λ))
+Little's Law: L = λW, Lq = λWq`,
+  MMc:`a  = λ / μ   (offered load, Erlangs)
+ρ  = a / c   (must be < 1)
+P0 = [ Σₙ₌₀^(c−1) aⁿ/n!  +  aᶜ/(c! (1 − ρ)) ]⁻¹
+C(c,a) = aᶜ/(c! (1 − ρ)) · P0     (Erlang C, chance of waiting)
+Lq = C · ρ / (1 − ρ)
+Wq = C / (cμ − λ)
+W  = Wq + 1/μ,   L = λW
+Pn = aⁿ/n! · P0  (n < c),   aᶜ/c! · ρⁿ⁻ᶜ · P0  (n ≥ c)`,
+  MM1K:`ρ  = λ / μ   (any value works)
+P0 = (1 − ρ) / (1 − ρᴷ⁺¹)       (ρ ≠ 1;  1/(K+1) if ρ = 1)
+Pn = ρⁿ P0,  n = 0…K
+P(block) = P_K
+λeff = λ (1 − P_K)
+L  = ρ/(1 − ρ) − (K+1) ρᴷ⁺¹ / (1 − ρᴷ⁺¹)
+Lq = L − (1 − P0)
+W  = L / λeff,   Wq = Lq / λeff`,
+  MD1:`ρ  = λ / μ   (must be < 1), service time exactly 1/μ
+P0 = 1 − ρ
+Lq = ρ² / (2 (1 − ρ))     (Pollaczek–Khinchine)
+L  = Lq + ρ
+Wq = Lq / λ
+W  = Wq + 1/μ`};
+const UNIT={s:{n:'second',min:1/60},min:{n:'minute',min:1},h:{n:'hour',min:60},d:{n:'day',min:1440}};
+$$('#cModel button').forEach(b=>b.onclick=()=>{ cModel=b.dataset.m; $$('#cModel button').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); Sound.click(); S.calcModels[cModel]=1; save(); if(Object.keys(S.calcModels).length>=4) award('lab'); calcUpdate(); });
+['cLam','cMu','cC','cK','cN','cUnit'].forEach(id=>$('#'+id).addEventListener('input',calcUpdate));
+const EXAMPLES=[{m:'MMc',u:'h',lam:100,mu:30,c:4,K:5,n:3,msg:'Example: a clinic with 4 nurses, 100 patients/hr, 30 per nurse.'},{m:'MM1',u:'min',lam:2,mu:2.5,c:1,K:5,n:0,msg:'Example: a ticket booth, 2 arrivals/min, 2.5 served/min.'},{m:'MM1K',u:'h',lam:30,mu:24,c:1,K:6,n:6,msg:'Example: a drive-thru with room for 6 cars.'},{m:'MD1',u:'h',lam:10,mu:12,c:1,K:5,n:0,msg:'Example: an automated car wash, 5-minute cycle.'}];
+let exI=0;
+$('#cExample').onclick=()=>{ const e=EXAMPLES[exI++%EXAMPLES.length]; cModel=e.m; $$('#cModel button').forEach(x=>x.setAttribute('aria-pressed',String(x.dataset.m===e.m))); $('#cUnit').value=e.u; $('#cLam').value=e.lam; $('#cMu').value=e.mu; $('#cC').value=e.c; $('#cK').value=e.K; $('#cN').value=e.n; S.calcModels[cModel]=1; save(); calcUpdate(); toast(`<span class="medal">i</span><div>${esc(e.msg)}</div>`,2600); };
+let lastCalcText='';
+function calcUpdate(){
+  $('#cCwrap').hidden= cModel!=='MMc'; $('#cKwrap').hidden= cModel!=='MM1K';
+  $('#cModelDesc').textContent=MODEL_DESC[cModel]; $('#cFormulas').textContent=FORMULAS[cModel];
+  const u=$('#cUnit').value, U=UNIT[u]; $$('.uname').forEach(x=>x.textContent=U.n);
+  const lam=parseFloat($('#cLam').value), mu=parseFloat($('#cMu').value), c=parseInt($('#cC').value,10), K=parseInt($('#cK').value,10), n=parseInt($('#cN').value,10);
+  const al=$('#cAlert');
+  const bad = !(lam>0)? 'Enter an arrival rate above 0.' : !(mu>0)? 'Enter a service rate above 0.' : (cModel==='MMc' && !(c>=1))? 'Servers must be a whole number of 1 or more.' : (cModel==='MM1K' && !(K>=1))? 'Capacity K must be a whole number of 1 or more.' : null;
+  if(bad){ al.className='calc-alert bad'; al.textContent=bad; $('#cTable').innerHTML=''; $('#cChart').innerHTML=''; return; }
+  const r=solve(cModel,{lam,mu,c,K});
+  if(!r.stable){ al.className='calc-alert bad'; al.textContent=`Unstable: ρ = ${sig(r.rho)}. Arrivals (${sig(lam)}/${U.n}) meet or beat total service capacity (${sig(r.servers*mu)}/${U.n}), so the line grows without limit.${cModel!=='MM1K'?' Try M/M/1/K to cap the line, or add servers.':''}`; award('meltdown'); }
+  else { al.className='calc-alert ok'; al.textContent= cModel==='MM1K'? `Always stable with a capacity limit. ${ (r.Pblock*100).toFixed(2)}% of arrivals are turned away.` : `Stable: servers are busy ${(r.rho*100).toFixed(1)}% of the time.`; }
+  const tm=v=>{ if(!isFinite(v)) return '∞'; const m=v*U.min; return `${sig(v)} ${U.n}s<small>${fmtMin(m)}</small>`; };
+  const pct=v=>isFinite(v)? `${sig(v)}<small>${(v*100).toFixed(2)}%</small>` : '—';
+  const rows=[
+    ['Utilization','ρ', isFinite(r.rho)? pct(cModel==='MM1K'? r.util : r.rho) : '∞'],
+    ['Offered load','a = λ/μ', sig(r.a)+' <small>Erlangs</small>'],
+    ['Probability system is empty','P0', r.stable? pct(r.P0):'0'],
+    [cModel==='MMc'?'Probability of waiting (Erlang C)':'Probability an arrival waits','P(wait)', r.stable? pct(r.Pwait):'1'],
+    ['Avg number in system','L', fmtNum(r.L,4)],
+    ['Avg number in line','Lq', fmtNum(r.Lq,4)],
+    ['Avg time in system','W', tm(r.W)],
+    ['Avg wait in line','Wq', tm(r.Wq)]
+  ];
+  if(cModel==='MM1K'){ rows.push(['Probability of turning someone away','P(K)',pct(r.Pblock)]); rows.push(['Effective arrival rate','λeff',`${sig(r.lamEff)} <small>per ${U.n}</small>`]); }
+  if(r.pn && r.stable && n>=0) rows.push([`Probability of exactly ${n} in system`,'P'+n,pct(r.pn(n))]);
+  else if(cModel==='MD1') rows.push(['P(n) for n ≥ 1','Pn','<small>no simple closed form for M/D/1</small>']);
+  $('#cTable').innerHTML=rows.map(([a,b,v])=>`<tr><th>${a}<span>${b}</span></th><td>${v}</td></tr>`).join('');
+  lastCalcText=`${({MM1:'M/M/1',MMc:'M/M/c',MM1K:'M/M/1/K',MD1:'M/D/1'})[cModel]} · λ=${lam}/${U.n}, μ=${mu}/${U.n}${cModel==='MMc'?', c='+c:''}${cModel==='MM1K'?', K='+K:''}\n`+rows.map(([a,b,v])=>`${a} (${b}): ${v.replace(/<small>/g,' (').replace(/<\/small>/g,')').replace(/<[^>]+>/g,'')}`).join('\n');
+  // chart
+  if(r.pn && r.stable){
+    let N= cModel==='MM1K'? K : 0, cum=0; if(cModel!=='MM1K'){ while(N<40 && cum<.985){ cum+=r.pn(N); N++; } N=Math.max(N-1,c||1); }
+    N=Math.min(N,40); const vals=[]; for(let i=0;i<=N;i++) vals.push(r.pn(i));
+    const mx=Math.max(...vals), Wd=600, Hd=200, pad=28, bw=(Wd-pad-8)/(N+1);
+    const yTicks=[0,mx/2,mx];
+    $('#cChart').innerHTML=`<svg viewBox="0 0 ${Wd} ${Hd+24}" role="img" aria-label="Bar chart of P(n) for n from 0 to ${N}">
+      ${yTicks.map(t=>{ const y=Hd-(t/mx)*(Hd-14); return `<line x1="${pad}" x2="${Wd}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/><text x="${pad-4}" y="${y+4}" text-anchor="end" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${(t*100).toFixed(0)}%</text>`; }).join('')}
+      ${vals.map((v,i)=>{ const h=(v/mx)*(Hd-14), x=pad+4+i*bw; const hl= i===n; return `<rect x="${x+1}" y="${Hd-h}" width="${Math.max(1,bw-3)}" height="${h}" rx="2" fill="${hl?'var(--ticket)':'var(--mustard)'}"><title>P(${i}) = ${(v*100).toFixed(2)}%</title></rect>${(N<=20||i%5===0)?`<text x="${x+bw/2}" y="${Hd+15}" text-anchor="middle" font-size="10" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${i}</text>`:''}`; }).join('')}
+    </svg><div class="muted" style="font-size:12.5px">Number of customers in the system (n). The red bar is your chosen n.</div>`;
+  } else $('#cChart').innerHTML=`<p class="muted" style="margin:0">${r.stable? 'M/D/1 has no simple closed form for P(n). P0 = 1 − ρ = '+sig(r.P0)+'.' : 'No steady state: the line keeps growing.'}</p>`;
+  // live scene: map rates to the per-hour sim scale (only the ratio matters visually)
+  caScene.patience= r.stable? Math.max(.2, r.Wq*U.min*2) : 5;
+  const k=60/U.min; caScene.setParams(cModel,{lam:lam*k,mu:mu*k,c:Math.min(c||1,30),K:Math.min(K||1,200)});
+}
+$('#cCopy').onclick=()=>{ navigator.clipboard.writeText(lastCalcText).then(()=>toast('<span class="medal">✓</span><div>Results copied.</div>',2000),()=>toast('<span class="medal">!</span><div>Copy was blocked here. Select the table text instead.</div>')); };
+
+/* ================= Collection ================= */
+const DECK=[
+  {title:'M/M/1 and Little\'s Law',f:'ρ = λ/μ\nL = ρ/(1−ρ)\nWq = λ/(μ(μ−λ))\nL = λW',note:'Holds for almost any stable queue: people in system = arrival rate × time spent.'},
+  {title:'Erlang C',f:'a = λ/μ,  ρ = a/c\nC = aᶜ/(c!(1−ρ)) · P0\nWq = C/(cμ − λ)',note:'Agner Krarup Erlang, Copenhagen telephone exchange, 1917.'},
+  {title:'Finite capacity M/M/1/K',f:'Pn = ρⁿ(1−ρ)/(1−ρᴷ⁺¹)\nP(block) = P_K\nλeff = λ(1 − P_K)',note:'Busy signals, full parking lots, and drive-thrus that wrap onto the street.'},
+  {title:'Pollaczek–Khinchine',f:'Lq = (λ²σ² + ρ²) / (2(1−ρ))\nM/D/1 (σ=0): Lq = ρ²/(2(1−ρ))',note:'Variance costs you. Cut service-time variability and the line shrinks.'},
+  {title:'Square-root staffing',f:'c ≈ a + β√a\na = λ/μ, β ≈ 0.5 to 2',note:'A rule of thumb for big call centers and stadiums: staff the load plus a safety margin that grows with √a.'}
+];
+function renderColl(){
+  const ri=rankFor(S.xp);
+  $('#ranks').innerHTML=RANKS.map((r,i)=>`<div class="rankstep ${i===ri?'cur':''} ${i>ri?'locked':''}"><b>${esc(r[1])}</b><span class="mono muted" style="font-size:12px">${r[0]} XP</span></div>`).join('');
+  $('#badges').innerHTML=BADGES.map(b=>`<div class="badge ${S.badges[b.id]?'':'locked'}"><span class="medal">${esc(b.m)}</span><div><strong>${esc(b.name)}</strong><span>${esc(b.desc)}</span></div></div>`).join('');
+  $('#deck').innerHTML=DECK.map((d,i)=> S.badges['deck'+i]? `<div class="fcard"><h3>${esc(d.title)}</h3><pre>${esc(d.f)}</pre><p>${esc(d.note)}</p></div>` : `<div class="fcard locked"><h3>Locked</h3><p style="color:var(--muted)">Earn a star on every ticket in ${esc(WORLDS[i].name)}.</p></div>`).join('');
+}
+let resetArmed=false;
+$('#resetBtn').onclick=()=>{ if(!resetArmed){ resetArmed=true; $('#resetBtn').textContent='Tap again to erase everything'; $('#resetMsg').textContent='This clears stars, XP, badges and streaks in this browser.'; setTimeout(()=>{ resetArmed=false; $('#resetBtn').textContent='Reset my progress'; $('#resetMsg').textContent=''; },4000); return; }
+  S=structuredClone(DEFAULT_STATE); save(); resetArmed=false; $('#resetBtn').textContent='Reset my progress'; $('#resetMsg').textContent='Progress cleared.'; renderPlayer(); renderColl(); };
+
+/* ================= Boot ================= */
+renderPlayer(); renderMap();
+const h=location.hash.replace('#','');
+if(h==='calculator') show('calc'); else if(h==='daily') show('daily'); else if(h==='badges') show('coll');
+calcUpdate();
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
